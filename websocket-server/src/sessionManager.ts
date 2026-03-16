@@ -131,7 +131,13 @@ function tryConnectModel() {
   );
 
   session.modelConn.on("open", () => {
-    const config = session.saved_config || {};
+    const defaultConfig = {
+      instructions: `あなたは丁寧な日本語で対応するヘルプデスクのAIオペレーターです。
+お客様からのお問い合わせに対して、簡潔かつ丁寧に日本語で回答してください。
+聞き取れなかった場合は「もう一度おっしゃっていただけますか？」と聞き返してください。
+通話開始時は「お電話ありがとうございます。AIオペレーターです。ご用件をどうぞ。」と挨拶してください。`,
+    };
+    const config = { ...defaultConfig, ...(session.saved_config || {}) };
     jsonSend(session.modelConn, {
       type: "session.update",
       session: {
@@ -144,6 +150,16 @@ function tryConnectModel() {
         ...config,
       },
     });
+    // 接続後すぐに AI から挨拶させる
+    jsonSend(session.modelConn, {
+      type: "conversation.item.create",
+      item: {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text: "通話が開始されました。挨拶してください。" }],
+      },
+    });
+    jsonSend(session.modelConn, { type: "response.create" });
   });
 
   session.modelConn.on("message", handleModelMessage);
