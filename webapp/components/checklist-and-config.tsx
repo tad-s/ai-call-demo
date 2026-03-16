@@ -75,16 +75,19 @@ export default function ChecklistAndConfig({
         }
 
         // 3. Check local server & public URL
+        const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:8081";
+        const isCloudServer = !serverUrl.includes("localhost");
         let foundPublicUrl = "";
         try {
-          const resLocal = await fetch("http://localhost:8081/public-url");
+          const resLocal = await fetch(`${serverUrl}/public-url`);
           if (resLocal.ok) {
             const pubData = await resLocal.json();
-            foundPublicUrl = pubData?.publicUrl || "";
+            foundPublicUrl = isCloudServer ? serverUrl : (pubData?.publicUrl || "");
             setLocalServerUp(true);
             setPublicUrl(foundPublicUrl);
+            if (isCloudServer) setPublicUrlAccessible(true);
           } else {
-            throw new Error("Local server not responding");
+            throw new Error("Server not responding");
           }
         } catch {
           setLocalServerUp(false);
@@ -211,15 +214,15 @@ export default function ChecklistAndConfig({
           ),
       },
       {
-        label: "Start local WebSocket server",
+        label: "Start WebSocket server",
         done: localServerUp,
-        description: "cd websocket-server && npm run dev",
+        description: process.env.NEXT_PUBLIC_SERVER_URL?.includes("localhost") ? "cd websocket-server && npm run dev" : `Using: ${process.env.NEXT_PUBLIC_SERVER_URL}`,
         field: null,
       },
       {
-        label: "Start ngrok",
+        label: "Public URL (ngrok or cloud)",
         done: publicUrlAccessible,
-        description: "Then set ngrok URL in websocket-server/.env",
+        description: "Then set URL in websocket-server/.env",
         field: (
           <div className="flex items-center gap-2 w-full">
             <div className="flex-1">

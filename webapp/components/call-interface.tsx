@@ -19,7 +19,9 @@ const CallInterface = () => {
 
   useEffect(() => {
     if (allConfigsReady && !ws) {
-      const newWs = new WebSocket("ws://localhost:8081/logs");
+      const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:8081";
+      const wsUrl = serverUrl.replace(/^https/, "wss").replace(/^http/, "ws") + "/logs";
+      const newWs = new WebSocket(wsUrl);
 
       newWs.onopen = () => {
         console.log("Connected to logs websocket");
