@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import TopBar from "@/components/top-bar";
 import ChecklistAndConfig from "@/components/checklist-and-config";
 import SessionConfigurationPanel from "@/components/session-configuration-panel";
@@ -16,6 +16,10 @@ const CallInterface = () => {
   const [items, setItems] = useState<Item[]>([]);
   const [callStatus, setCallStatus] = useState("disconnected");
   const [ws, setWs] = useState<WebSocket | null>(null);
+  const [toNumber, setToNumber] = useState("");
+  const [calling, setCalling] = useState(false);
+  const [callMessage, setCallMessage] = useState("");
+  const currentConfigRef = useRef<any>(null);
 
   useEffect(() => {
     if (allConfigsReady && !ws) {
@@ -26,6 +30,13 @@ const CallInterface = () => {
       newWs.onopen = () => {
         console.log("Connected to logs websocket");
         setCallStatus("connected");
+        // WebSocket接続時に保存済み設定を自動送信
+        if (currentConfigRef.current) {
+          newWs.send(JSON.stringify({
+            type: "session.update",
+            session: currentConfigRef.current,
+          }));
+        }
       };
 
       newWs.onmessage = (event) => {
@@ -44,6 +55,39 @@ const CallInterface = () => {
     }
   }, [allConfigsReady, ws]);
 
+  const handleSave = (config: any) => {
+    currentConfigRef.current = config;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "session.update", session: config }));
+    }
+  };
+
+  const handleCall = async () => {
+    if (!toNumber) {
+      setCallMessage("電話番号を入力してください");
+      return;
+    }
+    setCalling(true);
+    setCallMessage("");
+    try {
+      const res = await fetch("/api/call", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: toNumber }),
+      });
+      if (res.ok) {
+        setCallMessage("発信しました！まもなく着信します");
+      } else {
+        const err = await res.json();
+        setCallMessage(`エラー: ${err.message || "発信に失敗しました"}`);
+      }
+    } catch (e: any) {
+      setCallMessage(`エラー: ${e.message}`);
+    } finally {
+      setCalling(false);
+    }
+  };
+
   return (
     <div className="h-screen bg-white flex flex-col">
       <ChecklistAndConfig
@@ -54,23 +98,35 @@ const CallInterface = () => {
       />
       <TopBar />
       <div className="flex-grow p-4 h-full overflow-hidden flex flex-col">
+        {/* 発信パネル */}
+        <div className="flex items-center gap-2 mb-3 p-3 border rounded-lg bg-gray-50">
+          <span className="text-sm font-medium whitespace-nowrap">発信先:</span>
+          <input
+            type="tel"
+            placeholder="+819054424303"
+            value={toNumber}
+            onChange={(e) => setToNumber(e.target.value)}
+            className="border rounded px-3 py-1 text-sm flex-1 max-w-xs"
+          />
+          <button
+            onClick={handleCall}
+            disabled={calling}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-1 rounded text-sm font-medium disabled:opacity-50"
+          >
+            {calling ? "発信中..." : "📞 発信"}
+          </button>
+          {callMessage && (
+            <span className="text-sm text-gray-600">{callMessage}</span>
+          )}
+        </div>
+
         <div className="grid grid-cols-12 gap-4 h-full">
           {/* Left Column */}
           <div className="col-span-3 flex flex-col h-full overflow-hidden">
             <SessionConfigurationPanel
               callStatus={callStatus}
-              onSave={(config) => {
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                  const updateEvent = {
-                    type: "session.update",
-                    session: {
-                      ...config,
-                    },
-                  };
-                  console.log("Sending update event:", updateEvent);
-                  ws.send(JSON.stringify(updateEvent));
-                }
-              }}
+              onSave={handleSave}
+              onConfigLoaded={(config) => { currentConfigRef.current = config; }}
             />
           </div>
 

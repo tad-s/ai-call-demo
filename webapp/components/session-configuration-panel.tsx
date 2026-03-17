@@ -19,11 +19,13 @@ import { useBackendTools } from "@/lib/use-backend-tools";
 interface SessionConfigurationPanelProps {
   callStatus: string;
   onSave: (config: any) => void;
+  onConfigLoaded?: (config: any) => void;
 }
 
 const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
   callStatus,
   onSave,
+  onConfigLoaded,
 }) => {
   const [instructions, setInstructions] = useState(
     "You are a helpful assistant in a phone call."
@@ -54,6 +56,13 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
         if (config.voice) setVoice(config.voice);
         if (config.tools) setTools(config.tools.map((t: any) => JSON.stringify(t)));
         setHasUnsavedChanges(false);
+        if (onConfigLoaded && (config.instructions || config.voice)) {
+          onConfigLoaded({
+            instructions: config.instructions,
+            voice: config.voice || "ash",
+            tools: config.tools || [],
+          });
+        }
       })
       .catch(() => {});
   }, []);
