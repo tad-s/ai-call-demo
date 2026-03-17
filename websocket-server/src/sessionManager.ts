@@ -1,5 +1,23 @@
 import { RawData, WebSocket } from "ws";
+import { writeFileSync, readFileSync, existsSync } from "fs";
 import functions from "./functionHandlers";
+
+const CONFIG_PATH = process.env.CONFIG_PATH || "./config.json";
+
+export function loadDefaultConfig(): void {
+  try {
+    if (existsSync(CONFIG_PATH)) {
+      session.saved_config = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
+      console.log("Loaded saved config from", CONFIG_PATH);
+    }
+  } catch (e) {
+    console.error("Failed to load config:", e);
+  }
+}
+
+export function getDefaultConfig(): any {
+  return session.saved_config || null;
+}
 
 interface Session {
   twilioConn?: WebSocket;
@@ -112,6 +130,11 @@ function handleFrontendMessage(data: RawData) {
 
   if (msg.type === "session.update") {
     session.saved_config = msg.session;
+    try {
+      writeFileSync(CONFIG_PATH, JSON.stringify(msg.session));
+    } catch (e) {
+      console.error("Failed to save config:", e);
+    }
   }
 }
 

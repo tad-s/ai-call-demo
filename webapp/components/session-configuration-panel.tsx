@@ -40,8 +40,23 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
   >("idle");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
+  const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:8081";
+
   // Custom hook to fetch backend tools every 3 seconds
-  const backendTools = useBackendTools("http://localhost:8081/tools", 3000);
+  const backendTools = useBackendTools(`${serverUrl}/tools`, 3000);
+
+  // 起動時に保存済み設定を取得してフォームに反映
+  useEffect(() => {
+    fetch(`${serverUrl}/config`)
+      .then((r) => r.json())
+      .then((config) => {
+        if (config.instructions) setInstructions(config.instructions);
+        if (config.voice) setVoice(config.voice);
+        if (config.tools) setTools(config.tools.map((t: any) => JSON.stringify(t)));
+        setHasUnsavedChanges(false);
+      })
+      .catch(() => {});
+  }, []);
 
   // Track changes to determine if there are unsaved modifications
   useEffect(() => {

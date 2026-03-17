@@ -9,6 +9,8 @@ import cors from "cors";
 import {
   handleCallConnection,
   handleFrontendConnection,
+  loadDefaultConfig,
+  getDefaultConfig,
 } from "./sessionManager";
 import functions from "./functionHandlers";
 
@@ -29,6 +31,10 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
 app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
+
+// 起動時に保存済み設定を読み込む
+loadDefaultConfig();
 
 const twimlPath = join(__dirname, "twiml.xml");
 const twimlTemplate = readFileSync(twimlPath, "utf-8");
@@ -44,6 +50,11 @@ app.all("/twiml", (req, res) => {
 
   const twimlContent = twimlTemplate.replace("{{WS_URL}}", wsUrl.toString());
   res.type("text/xml").send(twimlContent);
+});
+
+// 保存済み設定を返す
+app.get("/config", (req, res) => {
+  res.json(getDefaultConfig() || {});
 });
 
 // New endpoint to list available tools (schemas)
