@@ -11,6 +11,7 @@ import {
   handleFrontendConnection,
   loadDefaultConfig,
   getDefaultConfig,
+  setDefaultConfig,
 } from "./sessionManager";
 import functions from "./functionHandlers";
 
@@ -64,6 +65,13 @@ app.post("/end-call", (req, res) => {
 // 保存済み設定を返す
 app.get("/config", (req, res) => {
   res.json(getDefaultConfig() || {});
+});
+
+// 設定を直接保存する（WebSocket不要）
+app.post("/config", (req, res) => {
+  const config = req.body;
+  setDefaultConfig(config);
+  res.json({ ok: true });
 });
 
 // New endpoint to list available tools (schemas)

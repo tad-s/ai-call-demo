@@ -19,6 +19,15 @@ export function getDefaultConfig(): any {
   return session.saved_config || null;
 }
 
+export function setDefaultConfig(config: any): void {
+  session.saved_config = config;
+  try {
+    writeFileSync(CONFIG_PATH, JSON.stringify(config));
+  } catch (e) {
+    console.error("Failed to save config:", e);
+  }
+}
+
 interface Session {
   twilioConn?: WebSocket;
   frontendConn?: WebSocket;

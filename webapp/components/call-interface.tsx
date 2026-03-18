@@ -56,8 +56,16 @@ const CallInterface = () => {
     }
   }, [allConfigsReady, ws]);
 
-  const handleSave = (config: any) => {
+  const handleSave = async (config: any) => {
     currentConfigRef.current = config;
+    // HTTPで永続化
+    const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:8081";
+    await fetch(`${serverUrl}/config`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config),
+    }).catch(() => {});
+    // WebSocketでリアルタイム反映
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: "session.update", session: config }));
     }
