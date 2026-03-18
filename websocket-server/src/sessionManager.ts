@@ -16,7 +16,17 @@ export function loadDefaultConfig(): void {
 }
 
 export function getDefaultConfig(): any {
-  return session.saved_config || null;
+  if (session.saved_config) return session.saved_config;
+  // Fallback: read from file on first access after server restart
+  try {
+    if (existsSync(CONFIG_PATH)) {
+      session.saved_config = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
+      return session.saved_config;
+    }
+  } catch (e) {
+    console.error("Failed to read config:", e);
+  }
+  return null;
 }
 
 export function setDefaultConfig(config: any): void {
@@ -58,7 +68,10 @@ export function handleCallConnection(ws: WebSocket, openAIApiKey: string) {
     session.lastAssistantItem = undefined;
     session.responseStartTimestamp = undefined;
     session.latestMediaTimestamp = undefined;
-    if (!session.frontendConn) session = {};
+    if (!session.frontendConn) {
+      const saved = session.saved_config;
+      session = { saved_config: saved };
+    }
   });
 }
 
@@ -70,7 +83,10 @@ export function handleFrontendConnection(ws: WebSocket) {
   ws.on("close", () => {
     cleanupConnection(session.frontendConn);
     session.frontendConn = undefined;
-    if (!session.twilioConn && !session.modelConn) session = {};
+    if (!session.twilioConn && !session.modelConn) {
+      const saved = session.saved_config;
+      session = { saved_config: saved };
+    }
   });
 }
 
@@ -291,7 +307,10 @@ function handleTruncation() {
 function closeModel() {
   cleanupConnection(session.modelConn);
   session.modelConn = undefined;
-  if (!session.twilioConn && !session.frontendConn) session = {};
+  if (!session.twilioConn && !session.frontendConn) {
+    const saved = session.saved_config;
+    session = { saved_config: saved };
+  }
 }
 
 function closeAllConnections() {
@@ -311,7 +330,6 @@ function closeAllConnections() {
   session.lastAssistantItem = undefined;
   session.responseStartTimestamp = undefined;
   session.latestMediaTimestamp = undefined;
-  session.saved_config = undefined;
 }
 
 function cleanupConnection(ws?: WebSocket) {

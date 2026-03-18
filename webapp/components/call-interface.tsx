@@ -119,7 +119,7 @@ const CallInterface = () => {
         setSelectedPhoneNumber={setSelectedPhoneNumber}
       />
       <TopBar />
-      <div className="flex-grow p-4 h-full overflow-hidden flex flex-col">
+      <div className="flex-1 p-4 overflow-hidden flex flex-col min-h-0">
         {/* 発信パネル */}
         <div className="flex items-center gap-2 mb-3 p-3 border rounded-lg bg-gray-50">
           <span className="text-sm font-medium whitespace-nowrap">発信先:</span>
@@ -149,7 +149,7 @@ const CallInterface = () => {
           )}
         </div>
 
-        <div className="grid grid-cols-12 gap-4 h-full">
+        <div className="grid grid-cols-12 gap-4 flex-1 min-h-0">
           {/* Left Column */}
           <div className="col-span-3 flex flex-col h-full overflow-hidden">
             <SessionConfigurationPanel
