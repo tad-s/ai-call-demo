@@ -19,6 +19,7 @@ const CallInterface = () => {
   const [toNumber, setToNumber] = useState("");
   const [calling, setCalling] = useState(false);
   const [callMessage, setCallMessage] = useState("");
+  const [disconnecting, setDisconnecting] = useState(false);
   const currentConfigRef = useRef<any>(null);
 
   useEffect(() => {
@@ -59,6 +60,19 @@ const CallInterface = () => {
     currentConfigRef.current = config;
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: "session.update", session: config }));
+    }
+  };
+
+  const handleEndCall = async () => {
+    setDisconnecting(true);
+    try {
+      const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:8081";
+      await fetch(`${serverUrl}/end-call`, { method: "POST" });
+      setCallMessage("通話を切断しました");
+    } catch {
+      setCallMessage("切断に失敗しました");
+    } finally {
+      setDisconnecting(false);
     }
   };
 
@@ -114,6 +128,13 @@ const CallInterface = () => {
             className="bg-green-600 hover:bg-green-700 text-white px-4 py-1 rounded text-sm font-medium disabled:opacity-50"
           >
             {calling ? "発信中..." : "📞 発信"}
+          </button>
+          <button
+            onClick={handleEndCall}
+            disabled={disconnecting}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-1 rounded text-sm font-medium disabled:opacity-50"
+          >
+            {disconnecting ? "切断中..." : "📵 強制切断"}
           </button>
           {callMessage && (
             <span className="text-sm text-gray-600">{callMessage}</span>

@@ -52,6 +52,15 @@ app.all("/twiml", (req, res) => {
   res.type("text/xml").send(twimlContent);
 });
 
+// 通話を強制切断する
+app.post("/end-call", (req, res) => {
+  if (currentCall) {
+    currentCall.close();
+    currentCall = null;
+  }
+  res.json({ ok: true });
+});
+
 // 保存済み設定を返す
 app.get("/config", (req, res) => {
   res.json(getDefaultConfig() || {});

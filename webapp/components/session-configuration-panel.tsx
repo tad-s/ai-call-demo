@@ -31,6 +31,7 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
     "You are a helpful assistant in a phone call."
   );
   const [voice, setVoice] = useState("ash");
+  const [model, setModel] = useState("gpt-4o-realtime-preview-2024-12-17");
   const [tools, setTools] = useState<string[]>([]);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingSchemaStr, setEditingSchemaStr] = useState("");
@@ -54,12 +55,14 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
       .then((config) => {
         if (config.instructions) setInstructions(config.instructions);
         if (config.voice) setVoice(config.voice);
+        if (config.model) setModel(config.model);
         if (config.tools) setTools(config.tools.map((t: any) => JSON.stringify(t)));
         setHasUnsavedChanges(false);
         if (onConfigLoaded && (config.instructions || config.voice)) {
           onConfigLoaded({
             instructions: config.instructions,
             voice: config.voice || "ash",
+            model: config.model || "gpt-4o-realtime-preview-2024-12-17",
             tools: config.tools || [],
           });
         }
@@ -70,7 +73,7 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
   // Track changes to determine if there are unsaved modifications
   useEffect(() => {
     setHasUnsavedChanges(true);
-  }, [instructions, voice, tools]);
+  }, [instructions, voice, model, tools]);
 
   // Reset save status after a delay when saved
   useEffect(() => {
@@ -88,6 +91,7 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
       await onSave({
         instructions,
         voice,
+        model,
         tools: tools.map((tool) => JSON.parse(tool)),
       });
       setSaveStatus("saved");
@@ -223,6 +227,26 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
                       {v}
                     </SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium leading-none">Model</label>
+              <Select value={model} onValueChange={setModel}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select model" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gpt-4o-realtime-preview-2024-12-17">
+                    gpt-4o-realtime (2024-12-17)
+                  </SelectItem>
+                  <SelectItem value="gpt-4o-realtime-preview-2025-06-03">
+                    gpt-4o-realtime-1.5 (2025-06-03)
+                  </SelectItem>
+                  <SelectItem value="gpt-4o-mini-realtime-preview">
+                    gpt-4o-mini-realtime (高速・低コスト)
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
