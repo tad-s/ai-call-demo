@@ -319,27 +319,30 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
               </div>
             </div>
 
-            <Button
-              className="w-full mt-4"
-              onClick={handleSave}
-              disabled={saveStatus === "saving" || !hasUnsavedChanges}
-            >
-              {saveStatus === "saving" ? (
-                "Saving..."
-              ) : saveStatus === "saved" ? (
-                <span className="flex items-center">
-                  Saved Successfully
-                  <Check className="ml-2 h-4 w-4" />
-                </span>
-              ) : saveStatus === "error" ? (
-                "Error Saving"
-              ) : (
-                "Save Configuration"
-              )}
-            </Button>
           </div>
         </ScrollArea>
       </CardContent>
+
+      <div className="px-3 pb-3 sm:px-5 sm:pb-5 pt-0">
+        <Button
+          className="w-full"
+          onClick={handleSave}
+          disabled={saveStatus === "saving" || !hasUnsavedChanges}
+        >
+          {saveStatus === "saving" ? (
+            "Saving..."
+          ) : saveStatus === "saved" ? (
+            <span className="flex items-center">
+              Saved Successfully
+              <Check className="ml-2 h-4 w-4" />
+            </span>
+          ) : saveStatus === "error" ? (
+            "Error Saving"
+          ) : (
+            "Save Configuration"
+          )}
+        </Button>
+      </div>
 
       <ToolConfigurationDialog
         open={openDialog}
