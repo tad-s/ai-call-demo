@@ -227,6 +227,20 @@ function handleModelMessage(data: RawData) {
       handleTruncation();
       break;
 
+    case "response.audio_transcript.done": {
+      const transcript: string = event.transcript || "";
+      const disconnectPhrases: string[] =
+        session.saved_config?.disconnect_phrases || ["お電話ありがとうございました"];
+      const shouldDisconnect = disconnectPhrases.some((phrase: string) =>
+        transcript.includes(phrase)
+      );
+      if (shouldDisconnect) {
+        console.log("Disconnect phrase detected, ending call:", transcript);
+        setTimeout(() => closeAllConnections(), 1500);
+      }
+      break;
+    }
+
     case "response.audio.delta":
       if (session.twilioConn && session.streamSid) {
         if (session.responseStartTimestamp === undefined) {

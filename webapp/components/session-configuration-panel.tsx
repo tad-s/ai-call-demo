@@ -33,6 +33,7 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
   const [voice, setVoice] = useState("ash");
   const [model, setModel] = useState("gpt-4o-realtime-preview-2024-12-17");
   const [tools, setTools] = useState<string[]>([]);
+  const [disconnectPhrases, setDisconnectPhrases] = useState("お電話ありがとうございました");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingSchemaStr, setEditingSchemaStr] = useState("");
   const [isJsonValid, setIsJsonValid] = useState(true);
@@ -57,6 +58,7 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
         if (config.voice) setVoice(config.voice);
         if (config.model) setModel(config.model);
         if (config.tools) setTools(config.tools.map((t: any) => JSON.stringify(t)));
+        if (config.disconnect_phrases) setDisconnectPhrases(config.disconnect_phrases.join("\n"));
         setHasUnsavedChanges(false);
         if (onConfigLoaded && (config.instructions || config.voice)) {
           onConfigLoaded({
@@ -73,7 +75,7 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
   // Track changes to determine if there are unsaved modifications
   useEffect(() => {
     setHasUnsavedChanges(true);
-  }, [instructions, voice, model, tools]);
+  }, [instructions, voice, model, tools, disconnectPhrases]);
 
   // Reset save status after a delay when saved
   useEffect(() => {
@@ -93,6 +95,10 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
         voice,
         model,
         tools: tools.map((tool) => JSON.parse(tool)),
+        disconnect_phrases: disconnectPhrases
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean),
       });
       setSaveStatus("saved");
       setHasUnsavedChanges(false);
@@ -249,6 +255,21 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
                   </SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium leading-none">
+                切断フレーズ
+              </label>
+              <Textarea
+                placeholder="お電話ありがとうございました"
+                className="min-h-[60px] resize-none"
+                value={disconnectPhrases}
+                onChange={(e) => setDisconnectPhrases(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                AIがこのフレーズを発話した後、自動で通話を切断します。複数行で複数設定可。
+              </p>
             </div>
 
             <div className="space-y-2">
