@@ -52,8 +52,9 @@ const Transcript: React.FC<TranscriptProps> = ({ items }) => {
               const Icon = isUser ? Phone : isTool ? Wrench : Bot;
 
               // Combine all text parts into a single string for display
+              // GA API returns audio content as {type:"audio", transcript:"..."} instead of {type:"text", text:"..."}
               const displayText = msg.content
-                ? msg.content.map((c) => c.text).join("")
+                ? msg.content.map((c) => c.text ?? (c as any).transcript ?? "").join("")
                 : "";
 
               return (

@@ -53,20 +53,29 @@ export default function handleRealtimeEvent(
       break;
     }
 
+    case "conversation.item.added":
     case "conversation.item.created": {
       const { item } = ev;
       if (item.type === "message") {
         // A completed message from user or assistant
-        const updatedContent =
-          item.content && item.content.length > 0 ? item.content : [];
+        // Normalize content: GA API may return {type:"audio", transcript:"..."} instead of {type:"text", text:"..."}
+        const normalizedContent = (item.content || []).map((c: any) => ({
+          type: "text",
+          text: c.text ?? c.transcript ?? "",
+        })).filter((c: any) => c.text !== "");
         setItems((prev) => {
           const idx = prev.findIndex((m) => m.id === item.id);
           if (idx >= 0) {
             const updated = [...prev];
+            // Preserve existing content if it already has text (built by delta events),
+            // only overwrite with normalized content if existing content is empty/placeholder
+            const existingContent = updated[idx].content || [];
+            const existingText = existingContent.map((c) => c.text ?? "").join("");
+            const shouldPreserveExisting = existingText.length > 3; // preserve if meaningful text exists
             updated[idx] = {
               ...updated[idx],
               ...item,
-              content: updatedContent,
+              content: shouldPreserveExisting ? existingContent : (normalizedContent.length > 0 ? normalizedContent : existingContent),
               status: "completed",
               timestamp:
                 updated[idx].timestamp || new Date().toLocaleTimeString(),
@@ -77,7 +86,7 @@ export default function handleRealtimeEvent(
               ...prev,
               createNewItem({
                 ...item,
-                content: updatedContent,
+                content: normalizedContent,
                 status: "completed",
               }),
             ];
@@ -168,8 +177,11 @@ export default function handleRealtimeEvent(
       break;
     }
 
+    case "response.output_audio_transcript.delta":
     case "response.audio_transcript.delta": {
       // Streaming transcript text (assistant)
+      // delta を新しい content item として追加するのではなく、
+      // 先頭の content item に文字列結合することで item 数の肥大化を防ぐ
       const { item_id, delta, output_index } = ev;
       if (output_index === 0 && delta) {
         setItems((prev) => {
@@ -177,10 +189,13 @@ export default function handleRealtimeEvent(
           if (idx >= 0) {
             const updated = [...prev];
             const existingContent = updated[idx].content || [];
-            updated[idx] = {
-              ...updated[idx],
-              content: [...existingContent, { type: "text", text: delta }],
-            };
+            if (existingContent.length > 0) {
+              const newContent = [...existingContent];
+              newContent[0] = { type: "text", text: (newContent[0].text || "") + delta };
+              updated[idx] = { ...updated[idx], content: newContent };
+            } else {
+              updated[idx] = { ...updated[idx], content: [{ type: "text", text: delta }] };
+            }
             return updated;
           } else {
             return [
@@ -194,6 +209,19 @@ export default function handleRealtimeEvent(
               }),
             ];
           }
+        });
+      }
+      break;
+    }
+
+    case "response.output_audio_transcript.done":
+    case "response.audio_transcript.done": {
+      // 音声トランスクリプトの確定イベント: 完成した transcript で content を上書きして完了状態にする
+      const { item_id, transcript } = ev;
+      if (transcript) {
+        updateOrAddItem(item_id, {
+          content: [{ type: "text", text: transcript }],
+          status: "completed",
         });
       }
       break;

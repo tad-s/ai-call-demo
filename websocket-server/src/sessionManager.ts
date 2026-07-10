@@ -48,6 +48,7 @@ interface Session {
   responseStartTimestamp?: number;
   latestMediaTimestamp?: number;
   openAIApiKey?: string;
+  pendingDisconnect?: boolean;
 }
 
 let session: Session = {};
@@ -150,7 +151,35 @@ function handleFrontendMessage(data: RawData) {
   if (!msg) return;
 
   if (isOpen(session.modelConn)) {
-    jsonSend(session.modelConn, msg);
+    if (msg.type === "session.update") {
+      // GA API 形式に変換して転送
+      const { model: _m, disconnect_phrases: _dp, voice, instructions, tools, silence_duration_ms } = msg.session || {};
+      jsonSend(session.modelConn, {
+        ...msg,
+        session: {
+          type: "realtime",
+          output_modalities: ["audio"],
+          instructions,
+          tools: tools || [],
+          audio: {
+            input: {
+              format: { type: "audio/pcmu" },
+              turn_detection: {
+                type: "server_vad",
+                ...(silence_duration_ms !== undefined ? { silence_duration_ms } : {}),
+              },
+              transcription: { model: "whisper-1" },
+            },
+            output: {
+              format: { type: "audio/pcmu" },
+              voice: voice || "ash",
+            },
+          },
+        },
+      });
+    } else {
+      jsonSend(session.modelConn, msg);
+    }
   }
 
   if (msg.type === "session.update") {
@@ -168,58 +197,74 @@ function tryConnectModel() {
     return;
   if (isOpen(session.modelConn)) return;
 
-  const model = session.saved_config?.model || "gpt-4o-realtime-preview-2024-12-17";
+  const model = session.saved_config?.model || "gpt-realtime-2";
   session.modelConn = new WebSocket(
     `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(model)}`,
     {
       headers: {
         Authorization: `Bearer ${session.openAIApiKey}`,
-        "OpenAI-Beta": "realtime=v1",
       },
     }
   );
 
   session.modelConn.on("open", () => {
-    const defaultConfig = {
-      instructions: `あなたは丁寧な日本語で対応するヘルプデスクのAIオペレーターです。
+    const defaultInstructions = `あなたは丁寧な日本語で対応するヘルプデスクのAIオペレーターです。
 お客様からのお問い合わせに対して、簡潔かつ丁寧に日本語で回答してください。
 聞き取れなかった場合は「もう一度おっしゃっていただけますか？」と聞き返してください。
-通話開始時は「お電話ありがとうございます。AIオペレーターです。ご用件をどうぞ。」と挨拶してください。`,
-    };
-    const config = { ...defaultConfig, ...(session.saved_config || {}) };
+通話開始時は「お電話ありがとうございます。AIオペレーターです。ご用件をどうぞ。」と挨拶してください。`;
+    // GA API: model, disconnect_phrases を除外し、voice と instructions を取り出す
+    const { model: _m, disconnect_phrases: _dp, voice, instructions, tools, silence_duration_ms } = session.saved_config || {};
     jsonSend(session.modelConn, {
       type: "session.update",
       session: {
-        modalities: ["text", "audio"],
-        turn_detection: { type: "server_vad" },
-        voice: "ash",
-        input_audio_transcription: { model: "whisper-1" },
-        input_audio_format: "g711_ulaw",
-        output_audio_format: "g711_ulaw",
-        ...config,
+        type: "realtime",
+        output_modalities: ["audio"],
+        instructions: instructions || defaultInstructions,
+        tools: tools || [],
+        audio: {
+          input: {
+            format: { type: "audio/pcmu" },
+            turn_detection: {
+              type: "server_vad",
+              ...(silence_duration_ms !== undefined ? { silence_duration_ms } : { silence_duration_ms: 800 }),
+            },
+            transcription: { model: "whisper-1" },
+          },
+          output: {
+            format: { type: "audio/pcmu" },
+            voice: voice || "ash",
+          },
+        },
       },
     });
     // 接続後すぐに AI から挨拶させる
-    jsonSend(session.modelConn, {
-      type: "conversation.item.create",
-      item: {
-        type: "message",
-        role: "user",
-        content: [{ type: "input_text", text: "通話が開始されました。挨拶してください。" }],
-      },
-    });
+    // conversation.item.create でダミーのユーザー発言を入れると
+    // 最初の本物のユーザー発話を「会話の開始」と誤認して挨拶が2回発生するため
+    // response.create のみで Instructions に基づいて挨拶させる
     jsonSend(session.modelConn, { type: "response.create" });
+    console.log("[OpenAI] WebSocket connected, model:", model);
   });
 
   session.modelConn.on("message", handleModelMessage);
-  session.modelConn.on("error", closeModel);
-  session.modelConn.on("close", closeModel);
+  session.modelConn.on("error", (err) => {
+    console.error("[OpenAI] WebSocket error:", err.message);
+    closeModel();
+  });
+  session.modelConn.on("close", (code, reason) => {
+    console.warn("[OpenAI] WebSocket closed. code:", code, "reason:", reason?.toString());
+    closeModel();
+  });
 }
 
 function handleModelMessage(data: RawData) {
   const event = parseMessage(data);
   if (!event) return;
 
+  if (event.type === "error") {
+    console.error("[OpenAI] error event:", JSON.stringify(event));
+  } else {
+    console.log("[OpenAI] event:", event.type);
+  }
   jsonSend(session.frontendConn, event);
 
   switch (event.type) {
@@ -227,6 +272,7 @@ function handleModelMessage(data: RawData) {
       handleTruncation();
       break;
 
+    case "response.output_audio_transcript.done":
     case "response.audio_transcript.done": {
       const transcript: string = event.transcript || "";
       const disconnectPhrases: string[] =
@@ -235,12 +281,23 @@ function handleModelMessage(data: RawData) {
         transcript.includes(phrase)
       );
       if (shouldDisconnect) {
-        console.log("Disconnect phrase detected, ending call:", transcript);
-        setTimeout(() => closeAllConnections(), 1500);
+        console.log("Disconnect phrase detected in transcript, waiting for audio to finish:", transcript);
+        session.pendingDisconnect = true;
       }
       break;
     }
 
+    case "response.done": {
+      if (session.pendingDisconnect) {
+        session.pendingDisconnect = false;
+        console.log("response.done received, disconnecting after audio playback delay...");
+        // response.done 時点で Twilio はまだ音声を再生中のため再生完了を待つ
+        setTimeout(() => closeAllConnections(), 3000);
+      }
+      break;
+    }
+
+    case "response.output_audio.delta":
     case "response.audio.delta":
       if (session.twilioConn && session.streamSid) {
         if (session.responseStartTimestamp === undefined) {

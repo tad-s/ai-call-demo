@@ -133,7 +133,9 @@ export default function ChecklistAndConfig({
     let success = false;
     for (let i = 0; i < 5; i++) {
       try {
-        const resTest = await fetch(publicUrl + "/public-url");
+        const resTest = await fetch(publicUrl + "/public-url", {
+          headers: { "ngrok-skip-browser-warning": "1" },
+        });
         if (resTest.ok) {
           setPublicUrlAccessible(true);
           success = true;

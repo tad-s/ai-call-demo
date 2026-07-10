@@ -31,9 +31,10 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
     "You are a helpful assistant in a phone call."
   );
   const [voice, setVoice] = useState("ash");
-  const [model, setModel] = useState("gpt-4o-realtime-preview-2024-12-17");
+  const [model, setModel] = useState("gpt-realtime-2");
   const [tools, setTools] = useState<string[]>([]);
   const [disconnectPhrases, setDisconnectPhrases] = useState("お電話ありがとうございました");
+  const [silenceDurationMs, setSilenceDurationMs] = useState(800);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingSchemaStr, setEditingSchemaStr] = useState("");
   const [isJsonValid, setIsJsonValid] = useState(true);
@@ -59,12 +60,13 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
         if (config.model) setModel(config.model);
         if (config.tools) setTools(config.tools.map((t: any) => JSON.stringify(t)));
         if (config.disconnect_phrases) setDisconnectPhrases(config.disconnect_phrases.join("\n"));
+        if (config.silence_duration_ms) setSilenceDurationMs(config.silence_duration_ms);
         setHasUnsavedChanges(false);
         if (onConfigLoaded && (config.instructions || config.voice)) {
           onConfigLoaded({
             instructions: config.instructions,
             voice: config.voice || "ash",
-            model: config.model || "gpt-4o-realtime-preview-2024-12-17",
+            model: config.model || "gpt-realtime",
             tools: config.tools || [],
           });
         }
@@ -75,7 +77,7 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
   // Track changes to determine if there are unsaved modifications
   useEffect(() => {
     setHasUnsavedChanges(true);
-  }, [instructions, voice, model, tools, disconnectPhrases]);
+  }, [instructions, voice, model, tools, disconnectPhrases, silenceDurationMs]);
 
   // Reset save status after a delay when saved
   useEffect(() => {
@@ -99,6 +101,7 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
           .split("\n")
           .map((s) => s.trim())
           .filter(Boolean),
+        silence_duration_ms: silenceDurationMs,
       });
       setSaveStatus("saved");
       setHasUnsavedChanges(false);
@@ -244,14 +247,17 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
                   <SelectValue placeholder="Select model" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gpt-4o-realtime-preview-2024-12-17">
-                    gpt-4o-realtime (2024-12-17)
+                  <SelectItem value="gpt-realtime-2">
+                    gpt-realtime-2（GPT-5クラス・最高品質・推奨）
                   </SelectItem>
-                  <SelectItem value="gpt-4o-realtime-preview-2025-06-03">
-                    gpt-4o-realtime-1.5 (2025-06-03)
+                  <SelectItem value="gpt-realtime">
+                    gpt-realtime（標準品質）
                   </SelectItem>
-                  <SelectItem value="gpt-4o-mini-realtime-preview">
-                    gpt-4o-mini-realtime (高速・低コスト)
+                  <SelectItem value="gpt-realtime-mini">
+                    gpt-realtime-mini（高速・低コスト）
+                  </SelectItem>
+                  <SelectItem value="gpt-4o-realtime-preview">
+                    gpt-4o-realtime-preview（旧世代）
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -269,6 +275,29 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
               />
               <p className="text-xs text-muted-foreground">
                 AIがこのフレーズを発話した後、自動で通話を切断します。複数行で複数設定可。
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium leading-none">
+                発話終了待機時間
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={200}
+                  max={2000}
+                  step={100}
+                  value={silenceDurationMs}
+                  onChange={(e) => setSilenceDurationMs(Number(e.target.value))}
+                  className="flex-1"
+                />
+                <span className="text-sm font-mono w-16 text-right">
+                  {silenceDurationMs} ms
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                発話が止まってからAIが応答するまでの待ち時間。長くするほど話の途中での割り込みを防ぎます（推奨: 800〜1200ms）。
               </p>
             </div>
 
