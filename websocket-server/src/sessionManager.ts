@@ -2,6 +2,7 @@ import { RawData, WebSocket } from "ws";
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import functions from "./functionHandlers";
+import { saveTranscriptToDb } from "./database";
 
 const CONFIG_PATH = process.env.CONFIG_PATH || "./config.json";
 const TRANSCRIPTS_DIR = process.env.TRANSCRIPTS_DIR || "./transcripts";
@@ -69,21 +70,28 @@ function saveTranscriptAndNotify() {
 
   const entries = session.transcriptEntries || [];
   if (entries.length > 0) {
+    const now = new Date();
+    const id = now.toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const record = {
+      id,
+      startTime: session.callStartTime || now.toISOString(),
+      endTime: now.toISOString(),
+      entries,
+    };
+
+    // ファイル保存
     try {
       if (!existsSync(TRANSCRIPTS_DIR)) mkdirSync(TRANSCRIPTS_DIR, { recursive: true });
-      const now = new Date();
-      const id = now.toISOString().replace(/[:.]/g, "-").slice(0, 19);
-      const record = {
-        id,
-        startTime: session.callStartTime || now.toISOString(),
-        endTime: now.toISOString(),
-        entries,
-      };
       writeFileSync(join(TRANSCRIPTS_DIR, `${id}.json`), JSON.stringify(record, null, 2));
-      console.log(`[Transcript] Saved: ${id}.json (${entries.length} entries)`);
+      console.log(`[Transcript] Saved to file: ${id}.json (${entries.length} entries)`);
     } catch (e) {
-      console.error("[Transcript] Failed to save:", e);
+      console.error("[Transcript] Failed to save to file:", e);
     }
+
+    // DB保存（DATABASE_URL が設定されている場合のみ）
+    saveTranscriptToDb(record).catch((e: any) =>
+      console.error("[DB] Failed to save transcript:", e.message)
+    );
   }
 
   if (isOpen(session.frontendConn)) {

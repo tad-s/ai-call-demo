@@ -14,6 +14,12 @@ import {
   setDefaultConfig,
 } from "./sessionManager";
 import functions from "./functionHandlers";
+import {
+  initDb,
+  isDbAvailable,
+  listTranscriptsFromDb,
+  getTranscriptFromDb,
+} from "./database";
 
 dotenv.config();
 
@@ -36,6 +42,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
 loadDefaultConfig();
+initDb().catch((e) => console.error("[DB] Init error:", e.message));
 
 const twimlPath = join(__dirname, "twiml.xml");
 const twimlTemplate = readFileSync(twimlPath, "utf-8");
@@ -75,8 +82,22 @@ app.get("/tools", (req, res) => {
   res.json(functions.map((f) => f.schema));
 });
 
-// 通話履歴一覧を返す
-app.get("/transcripts", (req, res) => {
+// ストレージ種別を返す
+app.get("/transcripts/source", (req, res) => {
+  res.json({ storageType: isDbAvailable() ? "db" : "file" });
+});
+
+// 通話履歴一覧を返す（DB優先、未設定時はファイル）
+app.get("/transcripts", async (req, res) => {
+  if (isDbAvailable()) {
+    try {
+      res.json(await listTranscriptsFromDb());
+      return;
+    } catch (e: any) {
+      console.error("[DB] listTranscripts failed:", e.message);
+    }
+  }
+  // ファイルフォールバック
   if (!existsSync(TRANSCRIPTS_DIR)) {
     res.json([]);
     return;
@@ -102,22 +123,32 @@ app.get("/transcripts", (req, res) => {
       })
       .filter(Boolean);
     res.json(list);
-  } catch (e) {
+  } catch {
     res.status(500).json({ error: "Failed to list transcripts" });
   }
 });
 
-// 特定通話の詳細を返す
-app.get("/transcripts/:id", (req, res) => {
-  const filename = `${req.params.id}.json`;
-  const filepath = join(TRANSCRIPTS_DIR, filename);
+// 特定通話の詳細を返す（DB優先、未設定時はファイル）
+app.get("/transcripts/:id", async (req, res) => {
+  if (isDbAvailable()) {
+    try {
+      const data = await getTranscriptFromDb(req.params.id);
+      if (data) {
+        res.json(data);
+        return;
+      }
+    } catch (e: any) {
+      console.error("[DB] getTranscript failed:", e.message);
+    }
+  }
+  // ファイルフォールバック
+  const filepath = join(TRANSCRIPTS_DIR, `${req.params.id}.json`);
   if (!existsSync(filepath)) {
     res.status(404).json({ error: "Not found" });
     return;
   }
   try {
-    const data = JSON.parse(readFileSync(filepath, "utf-8"));
-    res.json(data);
+    res.json(JSON.parse(readFileSync(filepath, "utf-8")));
   } catch {
     res.status(500).json({ error: "Failed to read transcript" });
   }
