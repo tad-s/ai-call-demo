@@ -1,8 +1,10 @@
 import { RawData, WebSocket } from "ws";
-import { writeFileSync, readFileSync, existsSync } from "fs";
+import { writeFileSync, readFileSync, existsSync, mkdirSync } from "fs";
+import { join } from "path";
 import functions from "./functionHandlers";
 
 const CONFIG_PATH = process.env.CONFIG_PATH || "./config.json";
+const TRANSCRIPTS_DIR = process.env.TRANSCRIPTS_DIR || "./transcripts";
 
 export function loadDefaultConfig(): void {
   try {
@@ -17,7 +19,6 @@ export function loadDefaultConfig(): void {
 
 export function getDefaultConfig(): any {
   if (session.saved_config) return session.saved_config;
-  // Fallback: read from file on first access after server restart
   try {
     if (existsSync(CONFIG_PATH)) {
       session.saved_config = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
@@ -38,6 +39,12 @@ export function setDefaultConfig(config: any): void {
   }
 }
 
+interface TranscriptEntry {
+  role: "user" | "assistant";
+  text: string;
+  timestamp: string;
+}
+
 interface Session {
   twilioConn?: WebSocket;
   frontendConn?: WebSocket;
@@ -49,9 +56,43 @@ interface Session {
   latestMediaTimestamp?: number;
   openAIApiKey?: string;
   pendingDisconnect?: boolean;
+  transcriptEntries?: TranscriptEntry[];
+  callStartTime?: string;
+  callSaved?: boolean;
 }
 
 let session: Session = {};
+
+function saveTranscriptAndNotify() {
+  if (session.callSaved) return;
+  session.callSaved = true;
+
+  const entries = session.transcriptEntries || [];
+  if (entries.length > 0) {
+    try {
+      if (!existsSync(TRANSCRIPTS_DIR)) mkdirSync(TRANSCRIPTS_DIR, { recursive: true });
+      const now = new Date();
+      const id = now.toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const record = {
+        id,
+        startTime: session.callStartTime || now.toISOString(),
+        endTime: now.toISOString(),
+        entries,
+      };
+      writeFileSync(join(TRANSCRIPTS_DIR, `${id}.json`), JSON.stringify(record, null, 2));
+      console.log(`[Transcript] Saved: ${id}.json (${entries.length} entries)`);
+    } catch (e) {
+      console.error("[Transcript] Failed to save:", e);
+    }
+  }
+
+  if (isOpen(session.frontendConn)) {
+    jsonSend(session.frontendConn, {
+      type: "call.ended",
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
 
 export function handleCallConnection(ws: WebSocket, openAIApiKey: string) {
   cleanupConnection(session.twilioConn);
@@ -61,6 +102,7 @@ export function handleCallConnection(ws: WebSocket, openAIApiKey: string) {
   ws.on("message", handleTwilioMessage);
   ws.on("error", ws.close);
   ws.on("close", () => {
+    saveTranscriptAndNotify();
     cleanupConnection(session.modelConn);
     cleanupConnection(session.twilioConn);
     session.twilioConn = undefined;
@@ -129,6 +171,9 @@ function handleTwilioMessage(data: RawData) {
       session.latestMediaTimestamp = 0;
       session.lastAssistantItem = undefined;
       session.responseStartTimestamp = undefined;
+      session.transcriptEntries = [];
+      session.callStartTime = new Date().toISOString();
+      session.callSaved = false;
       tryConnectModel();
       break;
     case "media":
@@ -152,7 +197,6 @@ function handleFrontendMessage(data: RawData) {
 
   if (isOpen(session.modelConn)) {
     if (msg.type === "session.update") {
-      // GA API 形式に変換して転送
       const { model: _m, disconnect_phrases: _dp, voice, instructions, tools, silence_duration_ms } = msg.session || {};
       jsonSend(session.modelConn, {
         ...msg,
@@ -212,7 +256,6 @@ function tryConnectModel() {
 お客様からのお問い合わせに対して、簡潔かつ丁寧に日本語で回答してください。
 聞き取れなかった場合は「もう一度おっしゃっていただけますか？」と聞き返してください。
 通話開始時は「お電話ありがとうございます。AIオペレーターです。ご用件をどうぞ。」と挨拶してください。`;
-    // GA API: model, disconnect_phrases を除外し、voice と instructions を取り出す
     const { model: _m, disconnect_phrases: _dp, voice, instructions, tools, silence_duration_ms } = session.saved_config || {};
     jsonSend(session.modelConn, {
       type: "session.update",
@@ -237,10 +280,6 @@ function tryConnectModel() {
         },
       },
     });
-    // 接続後すぐに AI から挨拶させる
-    // conversation.item.create でダミーのユーザー発言を入れると
-    // 最初の本物のユーザー発話を「会話の開始」と誤認して挨拶が2回発生するため
-    // response.create のみで Instructions に基づいて挨拶させる
     jsonSend(session.modelConn, { type: "response.create" });
     console.log("[OpenAI] WebSocket connected, model:", model);
   });
@@ -272,9 +311,28 @@ function handleModelMessage(data: RawData) {
       handleTruncation();
       break;
 
+    case "conversation.item.input_audio_transcription.completed": {
+      const transcript: string = event.transcript || "";
+      if (transcript && session.transcriptEntries) {
+        session.transcriptEntries.push({
+          role: "user",
+          text: transcript,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      break;
+    }
+
     case "response.output_audio_transcript.done":
     case "response.audio_transcript.done": {
       const transcript: string = event.transcript || "";
+      if (transcript && session.transcriptEntries) {
+        session.transcriptEntries.push({
+          role: "assistant",
+          text: transcript,
+          timestamp: new Date().toISOString(),
+        });
+      }
       const disconnectPhrases: string[] =
         session.saved_config?.disconnect_phrases || ["お電話ありがとうございました"];
       const shouldDisconnect = disconnectPhrases.some((phrase: string) =>
@@ -291,7 +349,6 @@ function handleModelMessage(data: RawData) {
       if (session.pendingDisconnect) {
         session.pendingDisconnect = false;
         console.log("response.done received, disconnecting after audio playback delay...");
-        // response.done 時点で Twilio はまだ音声を再生中のため再生完了を待つ
         setTimeout(() => closeAllConnections(), 3000);
       }
       break;
@@ -385,6 +442,7 @@ function closeModel() {
 }
 
 function closeAllConnections() {
+  saveTranscriptAndNotify();
   if (session.twilioConn) {
     session.twilioConn.close();
     session.twilioConn = undefined;

@@ -6,9 +6,13 @@ import ChecklistAndConfig from "@/components/checklist-and-config";
 import SessionConfigurationPanel from "@/components/session-configuration-panel";
 import Transcript from "@/components/transcript";
 import FunctionCallsPanel from "@/components/function-calls-panel";
+import CallHistoryPanel from "@/components/call-history-panel";
 import { Item } from "@/components/types";
 import handleRealtimeEvent from "@/lib/handle-realtime-event";
 import PhoneNumberChecklist from "@/components/phone-number-checklist";
+
+const HISTORY_KEY = "call_history";
+const MAX_HISTORY = 50;
 
 const CallInterface = () => {
   const [selectedPhoneNumber, setSelectedPhoneNumber] = useState("");
@@ -20,7 +24,16 @@ const CallInterface = () => {
   const [calling, setCalling] = useState(false);
   const [callMessage, setCallMessage] = useState("");
   const [disconnecting, setDisconnecting] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+
   const currentConfigRef = useRef<any>(null);
+  const itemsRef = useRef<Item[]>([]);
+  const callStartTimeRef = useRef<string>("");
+
+  // itemsRef を items と同期
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   useEffect(() => {
     if (allConfigsReady && !ws) {
@@ -31,7 +44,6 @@ const CallInterface = () => {
       newWs.onopen = () => {
         console.log("Connected to logs websocket");
         setCallStatus("connected");
-        // WebSocket接続時に保存済み設定を自動送信
         if (currentConfigRef.current) {
           newWs.send(JSON.stringify({
             type: "session.update",
@@ -43,6 +55,37 @@ const CallInterface = () => {
       newWs.onmessage = (event) => {
         const data = JSON.parse(event.data);
         console.log("Received logs event:", data);
+
+        // 通話開始: 開始時刻を記録
+        if (data.type === "session.created") {
+          callStartTimeRef.current = new Date().toISOString();
+        }
+
+        // 通話終了: localStorage に保存
+        if (data.type === "call.ended") {
+          const currentItems = itemsRef.current;
+          const hasContent = currentItems.some(
+            (it) => it.type === "message" && (it.role === "user" || it.role === "assistant")
+          );
+          if (hasContent) {
+            const record = {
+              id: `call_${Date.now()}`,
+              startTime: callStartTimeRef.current || new Date().toISOString(),
+              endTime: data.timestamp || new Date().toISOString(),
+              items: currentItems,
+            };
+            try {
+              const existing = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+              const updated = [record, ...existing].slice(0, MAX_HISTORY);
+              localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+              console.log("[History] Saved to localStorage:", record.id);
+            } catch (e) {
+              console.error("[History] Failed to save:", e);
+            }
+          }
+          return;
+        }
+
         handleRealtimeEvent(data, setItems);
       };
 
@@ -58,14 +101,12 @@ const CallInterface = () => {
 
   const handleSave = async (config: any) => {
     currentConfigRef.current = config;
-    // HTTPで永続化
     const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:8081";
     await fetch(`${serverUrl}/config`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(config),
     }).catch(() => {});
-    // WebSocketでリアルタイム反映
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: "session.update", session: config }));
     }
@@ -144,6 +185,12 @@ const CallInterface = () => {
           >
             {disconnecting ? "切断中..." : "📵 強制切断"}
           </button>
+          <button
+            onClick={() => setShowHistory(true)}
+            className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-1 rounded text-sm font-medium"
+          >
+            📋 通話履歴
+          </button>
           {callMessage && (
             <span className="text-sm text-gray-600">{callMessage}</span>
           )}
@@ -175,6 +222,10 @@ const CallInterface = () => {
           </div>
         </div>
       </div>
+
+      {showHistory && (
+        <CallHistoryPanel onClose={() => setShowHistory(false)} />
+      )}
     </div>
   );
 };

@@ -3,7 +3,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { IncomingMessage } from "http";
 import dotenv from "dotenv";
 import http from "http";
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync, existsSync } from "fs";
 import { join } from "path";
 import cors from "cors";
 import {
@@ -20,6 +20,7 @@ dotenv.config();
 const PORT = parseInt(process.env.PORT || "8081", 10);
 const PUBLIC_URL = process.env.PUBLIC_URL || "";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+const TRANSCRIPTS_DIR = process.env.TRANSCRIPTS_DIR || "./transcripts";
 
 if (!OPENAI_API_KEY) {
   console.error("OPENAI_API_KEY environment variable is required");
@@ -34,7 +35,6 @@ const wss = new WebSocketServer({ server });
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
-// 起動時に保存済み設定を読み込む
 loadDefaultConfig();
 
 const twimlPath = join(__dirname, "twiml.xml");
@@ -53,7 +53,6 @@ app.all("/twiml", (req, res) => {
   res.type("text/xml").send(twimlContent);
 });
 
-// 通話を強制切断する
 app.post("/end-call", (req, res) => {
   if (currentCall) {
     currentCall.close();
@@ -62,21 +61,66 @@ app.post("/end-call", (req, res) => {
   res.json({ ok: true });
 });
 
-// 保存済み設定を返す
 app.get("/config", (req, res) => {
   res.json(getDefaultConfig() || {});
 });
 
-// 設定を直接保存する（WebSocket不要）
 app.post("/config", (req, res) => {
   const config = req.body;
   setDefaultConfig(config);
   res.json({ ok: true });
 });
 
-// New endpoint to list available tools (schemas)
 app.get("/tools", (req, res) => {
   res.json(functions.map((f) => f.schema));
+});
+
+// 通話履歴一覧を返す
+app.get("/transcripts", (req, res) => {
+  if (!existsSync(TRANSCRIPTS_DIR)) {
+    res.json([]);
+    return;
+  }
+  try {
+    const files = readdirSync(TRANSCRIPTS_DIR)
+      .filter((f) => f.endsWith(".json"))
+      .sort()
+      .reverse();
+    const list = files
+      .map((f) => {
+        try {
+          const data = JSON.parse(readFileSync(join(TRANSCRIPTS_DIR, f), "utf-8"));
+          return {
+            id: data.id,
+            startTime: data.startTime,
+            endTime: data.endTime,
+            entryCount: (data.entries || []).length,
+          };
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+    res.json(list);
+  } catch (e) {
+    res.status(500).json({ error: "Failed to list transcripts" });
+  }
+});
+
+// 特定通話の詳細を返す
+app.get("/transcripts/:id", (req, res) => {
+  const filename = `${req.params.id}.json`;
+  const filepath = join(TRANSCRIPTS_DIR, filename);
+  if (!existsSync(filepath)) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  try {
+    const data = JSON.parse(readFileSync(filepath, "utf-8"));
+    res.json(data);
+  } catch {
+    res.status(500).json({ error: "Failed to read transcript" });
+  }
 });
 
 let currentCall: WebSocket | null = null;
