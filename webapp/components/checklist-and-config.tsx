@@ -65,9 +65,17 @@ export default function ChecklistAndConfig({
         const numbersData = await res.json();
         if (Array.isArray(numbersData) && numbersData.length > 0) {
           setPhoneNumbers(numbersData);
-          // If currentNumberSid not set or not in the list, use first
+          // Prefer: already-selected number > this environment's own
+          // TWILIO_PHONE_NUMBER (webapp/.env) > first in the list.
+          // Without the env-number match, an account with multiple numbers
+          // (e.g. one per environment) would default to whichever number
+          // Twilio returns first, causing this environment to poll a
+          // webhook URL that belongs to a different environment.
           const selected =
             numbersData.find((p: PhoneNumber) => p.sid === currentNumberSid) ||
+            numbersData.find(
+              (p: PhoneNumber) => p.phoneNumber === credData?.phoneNumber
+            ) ||
             numbersData[0];
           setCurrentNumberSid(selected.sid);
           setCurrentVoiceUrl(selected.voiceUrl || "");
@@ -342,13 +350,18 @@ export default function ChecklistAndConfig({
           ))}
         </div>
 
-        <div className="mt-6 flex flex-col sm:flex-row sm:justify-end">
+        <div className="mt-6 flex flex-col items-end gap-2">
+          {allChecksPassed && (
+            <p className="text-sm font-medium text-green-600">
+              各サービス起動確認OK。利用できる状態です！
+            </p>
+          )}
           <Button
             variant="outline"
             onClick={handleDone}
             disabled={!allChecksPassed}
           >
-            Let's go!
+            閉じる
           </Button>
         </div>
       </DialogContent>

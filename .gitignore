@@ -14,6 +14,10 @@ webapp/out/
 # ビルド成果物
 websocket-server/dist/
 
+# ローカル実行時の運用データ
+websocket-server/config.json
+websocket-server/transcripts/
+
 # OS
 .DS_Store
 Thumbs.db

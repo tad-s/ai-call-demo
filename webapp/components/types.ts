@@ -18,6 +18,7 @@ export type Item = {
 export interface PhoneNumber {
   sid: string;
   friendlyName: string;
+  phoneNumber: string;
   voiceUrl?: string;
 }
 
