@@ -25,7 +25,7 @@ const Transcript: React.FC<TranscriptProps> = ({ items }) => {
 
   return (
     <Card className="h-full flex flex-col overflow-visible lg:overflow-hidden">
-      <CardContent className="lg:flex-1 lg:h-full min-h-0 overflow-visible lg:overflow-hidden flex flex-col p-0">
+      <CardContent className="lg:flex-1 lg:h-full lg:min-h-0 overflow-visible lg:overflow-hidden flex flex-col p-0">
         {transcriptItems.length === 0 && (
           <div className="flex lg:flex-1 lg:h-full items-center justify-center py-10 lg:mt-36 lg:py-0">
             <div className="flex flex-col items-center gap-3 justify-center lg:h-full">

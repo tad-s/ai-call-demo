@@ -196,9 +196,9 @@ const CallInterface = () => {
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:flex-1 min-h-0">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:flex-1 lg:min-h-0">
           {/* Left Column */}
-          <div className="lg:col-span-3 flex flex-col h-auto lg:h-full overflow-visible lg:overflow-hidden min-h-0">
+          <div className="lg:col-span-3 flex flex-col h-auto lg:h-full overflow-visible lg:overflow-hidden lg:min-h-0">
             <SessionConfigurationPanel
               callStatus={callStatus}
               onSave={handleSave}
@@ -217,7 +217,7 @@ const CallInterface = () => {
           </div>
 
           {/* Right Column: Function Calls */}
-          <div className="lg:col-span-3 flex flex-col h-auto lg:h-full overflow-visible lg:overflow-hidden min-h-0">
+          <div className="lg:col-span-3 flex flex-col h-auto lg:h-full overflow-visible lg:overflow-hidden lg:min-h-0">
             <FunctionCallsPanel items={items} ws={ws} />
           </div>
         </div>

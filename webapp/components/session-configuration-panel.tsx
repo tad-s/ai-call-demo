@@ -186,7 +186,7 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
   };
 
   return (
-    <Card className="flex flex-col h-full w-full mx-auto min-h-0">
+    <Card className="flex flex-col h-full w-full mx-auto lg:min-h-0">
       <CardHeader className="pb-0 px-4 sm:px-6">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base font-semibold">
@@ -209,7 +209,7 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="lg:flex-1 p-3 sm:p-5 overflow-visible lg:overflow-hidden min-h-0">
+      <CardContent className="lg:flex-1 p-3 sm:p-5 overflow-visible lg:overflow-hidden lg:min-h-0">
         <div className="lg:h-full overflow-visible lg:overflow-y-auto">
           <div className="space-y-4 sm:space-y-6 m-1 pr-1">
             <div className="space-y-2">
