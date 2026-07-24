@@ -160,45 +160,45 @@ const CallInterface = () => {
         setSelectedPhoneNumber={setSelectedPhoneNumber}
       />
       <TopBar />
-      <div className="flex-1 p-4 overflow-hidden flex flex-col min-h-0">
+      <div className="flex-1 p-4 overflow-y-auto lg:overflow-hidden flex flex-col min-h-0">
         {/* 発信パネル */}
-        <div className="flex items-center gap-2 mb-3 p-3 border rounded-lg bg-gray-50">
+        <div className="flex flex-wrap items-center gap-2 mb-3 p-3 border rounded-lg bg-gray-50">
           <span className="text-sm font-medium whitespace-nowrap">発信先:</span>
           <input
             type="tel"
             placeholder="+819054424303"
             value={toNumber}
             onChange={(e) => setToNumber(e.target.value)}
-            className="border rounded px-3 py-1 text-sm flex-1 max-w-xs"
+            className="border rounded px-3 py-1 text-sm flex-1 min-w-[10rem] sm:max-w-xs"
           />
           <button
             onClick={handleCall}
             disabled={calling}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-1 rounded text-sm font-medium disabled:opacity-50"
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-1 rounded text-sm font-medium disabled:opacity-50 whitespace-nowrap"
           >
             {calling ? "発信中..." : "📞 発信"}
           </button>
           <button
             onClick={handleEndCall}
             disabled={disconnecting}
-            className="bg-red-600 hover:bg-red-700 text-white px-4 py-1 rounded text-sm font-medium disabled:opacity-50"
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-1 rounded text-sm font-medium disabled:opacity-50 whitespace-nowrap"
           >
             {disconnecting ? "切断中..." : "📵 強制切断"}
           </button>
           <button
             onClick={() => setShowHistory(true)}
-            className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-1 rounded text-sm font-medium"
+            className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-1 rounded text-sm font-medium whitespace-nowrap"
           >
             📋 通話履歴
           </button>
           {callMessage && (
-            <span className="text-sm text-gray-600">{callMessage}</span>
+            <span className="text-sm text-gray-600 basis-full sm:basis-auto">{callMessage}</span>
           )}
         </div>
 
-        <div className="grid grid-cols-12 gap-4 flex-1 min-h-0">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0">
           {/* Left Column */}
-          <div className="col-span-3 flex flex-col h-full overflow-hidden min-h-0">
+          <div className="lg:col-span-3 flex flex-col h-auto lg:h-full overflow-visible lg:overflow-hidden min-h-0">
             <SessionConfigurationPanel
               callStatus={callStatus}
               onSave={handleSave}
@@ -207,7 +207,7 @@ const CallInterface = () => {
           </div>
 
           {/* Middle Column: Transcript */}
-          <div className="col-span-6 flex flex-col gap-4 h-full overflow-hidden">
+          <div className="lg:col-span-6 flex flex-col gap-4 h-auto lg:h-full overflow-visible lg:overflow-hidden">
             <PhoneNumberChecklist
               selectedPhoneNumber={selectedPhoneNumber}
               allConfigsReady={allConfigsReady}
@@ -217,7 +217,7 @@ const CallInterface = () => {
           </div>
 
           {/* Right Column: Function Calls */}
-          <div className="col-span-3 flex flex-col h-full overflow-hidden min-h-0">
+          <div className="lg:col-span-3 flex flex-col h-auto lg:h-full overflow-visible lg:overflow-hidden min-h-0">
             <FunctionCallsPanel items={items} ws={ws} />
           </div>
         </div>

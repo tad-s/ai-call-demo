@@ -20,7 +20,7 @@ const PhoneNumberChecklist: React.FC<PhoneNumberChecklistProps> = ({
   const [isVisible, setIsVisible] = useState(true);
 
   return (
-    <Card className="flex items-center justify-between p-4">
+    <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
       <div className="flex flex-col">
         <span className="text-sm text-gray-500">Number</span>
         <div className="flex items-center">
@@ -41,7 +41,7 @@ const PhoneNumberChecklist: React.FC<PhoneNumberChecklistProps> = ({
           </Button>
         </div>
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
           {allConfigsReady ? (
             <CheckCircle className="text-green-500 w-4 h-4" />
