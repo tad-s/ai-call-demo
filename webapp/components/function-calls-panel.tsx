@@ -64,7 +64,7 @@ const FunctionCallsPanel: React.FC<FunctionCallsPanelProps> = ({
         </CardTitle>
       </CardHeader>
       <CardContent className="lg:flex-1 p-4">
-        <ScrollArea className="lg:h-full">
+        <ScrollArea className="overflow-visible lg:h-full lg:overflow-hidden">
           <div className="space-y-4">
             {functionCallsWithStatus.map((call) => (
               <div

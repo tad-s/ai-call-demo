@@ -27,8 +27,8 @@ const Transcript: React.FC<TranscriptProps> = ({ items }) => {
     <Card className="h-full flex flex-col overflow-visible lg:overflow-hidden">
       <CardContent className="lg:flex-1 lg:h-full min-h-0 overflow-visible lg:overflow-hidden flex flex-col p-0">
         {transcriptItems.length === 0 && (
-          <div className="flex flex-1 h-full items-center justify-center mt-36">
-            <div className="flex flex-col items-center gap-3 justify-center h-full">
+          <div className="flex lg:flex-1 lg:h-full items-center justify-center py-10 lg:mt-36 lg:py-0">
+            <div className="flex flex-col items-center gap-3 justify-center lg:h-full">
               <div className="h-[140px] w-[140px] rounded-full bg-secondary/20 flex items-center justify-center">
                 <MessageSquare className="h-16 w-16 text-foreground/10 bg-transparent" />
               </div>
@@ -43,7 +43,7 @@ const Transcript: React.FC<TranscriptProps> = ({ items }) => {
             </div>
           </div>
         )}
-        <ScrollArea className="lg:h-full">
+        <ScrollArea className="overflow-visible lg:h-full lg:overflow-hidden">
           <div className="flex flex-col gap-6 p-6">
             {transcriptItems.map((msg, i) => {
               const isUser = msg.role === "user";

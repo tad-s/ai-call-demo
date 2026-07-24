@@ -196,7 +196,7 @@ const CallInterface = () => {
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:flex-1 min-h-0">
           {/* Left Column */}
           <div className="lg:col-span-3 flex flex-col h-auto lg:h-full overflow-visible lg:overflow-hidden min-h-0">
             <SessionConfigurationPanel
