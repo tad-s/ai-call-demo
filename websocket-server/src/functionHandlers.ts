@@ -36,9 +36,12 @@ functions.push({
     name: "web_search",
     type: "function",
     description:
-      "Search the web for information you don't already know or that changes over time " +
-      "(e.g. today's or tomorrow's weather, recent sports results, current news, prices). " +
-      "Use this whenever the caller asks about something time-sensitive or recent.",
+      "Mandatory for any question whose correct answer could depend on today's date: " +
+      "today's/tomorrow's weather, sports results or schedules, news, prices, or any event " +
+      "that may not have happened yet as of today. Your training data has a cutoff date and " +
+      "cannot be trusted for these - NEVER guess or answer from memory for them, even if you " +
+      "feel confident. Always call this tool first and answer only from its results. This " +
+      "applies whether or not the caller explicitly says to search or look something up.",
     parameters: {
       type: "object",
       properties: {
