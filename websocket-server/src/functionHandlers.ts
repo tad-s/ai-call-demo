@@ -1,4 +1,5 @@
 import { FunctionHandler } from "./types";
+import { runWebSearch } from "./webSearch";
 
 const functions: FunctionHandler[] = [];
 
@@ -27,6 +28,30 @@ functions.push({
     const data = await response.json();
     const currentTemp = data.current?.temperature_2m;
     return JSON.stringify({ temp: currentTemp });
+  },
+});
+
+functions.push({
+  schema: {
+    name: "web_search",
+    type: "function",
+    description:
+      "Search the web for information you don't already know or that changes over time " +
+      "(e.g. today's or tomorrow's weather, recent sports results, current news, prices). " +
+      "Use this whenever the caller asks about something time-sensitive or recent.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "The search query, in the caller's language if possible.",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  handler: async (args: { query: string }) => {
+    return runWebSearch(args.query);
   },
 });
 
