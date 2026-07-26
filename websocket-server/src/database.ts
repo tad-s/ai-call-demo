@@ -100,3 +100,65 @@ export async function getTranscriptFromDb(id: string): Promise<{
   );
   return result.rows[0] || null;
 }
+
+export async function initPresetsTable(): Promise<void> {
+  const p = getPool();
+  if (!p) return;
+  try {
+    await p.query(`
+      CREATE TABLE IF NOT EXISTS prompt_presets (
+        id          VARCHAR(50)   PRIMARY KEY,
+        name        VARCHAR(200)  NOT NULL,
+        config      JSONB         NOT NULL,
+        updated_at  TIMESTAMPTZ   DEFAULT NOW()
+      )
+    `);
+    console.log("[DB] Table ready: prompt_presets");
+  } catch (e: any) {
+    console.error("[DB] Init failed (prompt_presets):", e.message);
+  }
+}
+
+export async function listPresetsFromDb(): Promise<
+  { id: string; name: string; updatedAt: string }[]
+> {
+  const p = getPool();
+  if (!p) return [];
+  const result = await p.query(
+    `SELECT id, name, updated_at AS "updatedAt" FROM prompt_presets ORDER BY updated_at DESC`
+  );
+  return result.rows;
+}
+
+export async function getPresetFromDb(
+  id: string
+): Promise<{ id: string; name: string; config: any; updatedAt: string } | null> {
+  const p = getPool();
+  if (!p) return null;
+  const result = await p.query(
+    `SELECT id, name, config, updated_at AS "updatedAt" FROM prompt_presets WHERE id = $1`,
+    [id]
+  );
+  return result.rows[0] || null;
+}
+
+export async function savePresetToDb(preset: {
+  id: string;
+  name: string;
+  config: any;
+}): Promise<void> {
+  const p = getPool();
+  if (!p) return;
+  await p.query(
+    `INSERT INTO prompt_presets (id, name, config, updated_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (id) DO UPDATE SET name = $2, config = $3, updated_at = NOW()`,
+    [preset.id, preset.name, JSON.stringify(preset.config)]
+  );
+}
+
+export async function deletePresetFromDb(id: string): Promise<void> {
+  const p = getPool();
+  if (!p) return;
+  await p.query(`DELETE FROM prompt_presets WHERE id = $1`, [id]);
+}

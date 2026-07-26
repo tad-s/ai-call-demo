@@ -17,6 +17,7 @@ websocket-server/dist/
 # ローカル実行時の運用データ
 websocket-server/config.json
 websocket-server/transcripts/
+websocket-server/presets.json
 
 # OS
 .DS_Store

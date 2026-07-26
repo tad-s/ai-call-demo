@@ -19,7 +19,9 @@ import {
   isDbAvailable,
   listTranscriptsFromDb,
   getTranscriptFromDb,
+  initPresetsTable,
 } from "./database";
+import { listPresets, getPreset, savePreset, deletePreset } from "./presets";
 
 dotenv.config();
 
@@ -43,6 +45,7 @@ app.use(express.json());
 
 loadDefaultConfig();
 initDb().catch((e) => console.error("[DB] Init error:", e.message));
+initPresetsTable().catch((e) => console.error("[DB] Init error:", e.message));
 
 const twimlPath = join(__dirname, "twiml.xml");
 const twimlTemplate = readFileSync(twimlPath, "utf-8");
@@ -80,6 +83,63 @@ app.post("/config", (req, res) => {
 
 app.get("/tools", (req, res) => {
   res.json(functions.map((f) => f.schema));
+});
+
+// プロンプトプリセット（複数登録・切り替え用）
+app.get("/presets", async (req, res) => {
+  try {
+    res.json(await listPresets());
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/presets/:id", async (req, res) => {
+  try {
+    const preset = await getPreset(req.params.id);
+    if (!preset) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    res.json(preset);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/presets", async (req, res) => {
+  const { name, config } = req.body;
+  if (!name || !config) {
+    res.status(400).json({ error: "name and config are required" });
+    return;
+  }
+  try {
+    res.json(await savePreset({ name, config }));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put("/presets/:id", async (req, res) => {
+  const { name, config } = req.body;
+  if (!name || !config) {
+    res.status(400).json({ error: "name and config are required" });
+    return;
+  }
+  try {
+    res.json(await savePreset({ id: req.params.id, name, config }));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/presets/:id", async (req, res) => {
+  try {
+    await deletePreset(req.params.id);
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ストレージ種別を返す

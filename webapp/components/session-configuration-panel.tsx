@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Plus, Edit, Trash, Check, AlertCircle } from "lucide-react";
 import { toolTemplates } from "@/lib/tool-templates";
@@ -45,6 +46,15 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
   >("idle");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
+  const [presets, setPresets] = useState<
+    { id: string; name: string; updatedAt: string }[]
+  >([]);
+  const [selectedPresetId, setSelectedPresetId] = useState("");
+  const [newPresetName, setNewPresetName] = useState("");
+  const [presetStatus, setPresetStatus] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+
   const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:8081";
 
   // Custom hook to fetch backend tools every 3 seconds
@@ -74,6 +84,14 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
       .catch(() => {});
   }, []);
 
+  // プリセット一覧を取得
+  useEffect(() => {
+    fetch(`${serverUrl}/presets`)
+      .then((r) => r.json())
+      .then((list) => setPresets(Array.isArray(list) ? list : []))
+      .catch(() => {});
+  }, []);
+
   // Track changes to determine if there are unsaved modifications
   useEffect(() => {
     setHasUnsavedChanges(true);
@@ -89,24 +107,109 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
     }
   }, [saveStatus]);
 
+  // Reset preset status after a delay when saved
+  useEffect(() => {
+    if (presetStatus === "saved") {
+      const timer = setTimeout(() => setPresetStatus("idle"), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [presetStatus]);
+
+  const buildConfig = () => ({
+    instructions,
+    voice,
+    model,
+    tools: tools.map((tool) => JSON.parse(tool)),
+    disconnect_phrases: disconnectPhrases
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    silence_duration_ms: silenceDurationMs,
+  });
+
   const handleSave = async () => {
     setSaveStatus("saving");
     try {
-      await onSave({
-        instructions,
-        voice,
-        model,
-        tools: tools.map((tool) => JSON.parse(tool)),
-        disconnect_phrases: disconnectPhrases
-          .split("\n")
-          .map((s) => s.trim())
-          .filter(Boolean),
-        silence_duration_ms: silenceDurationMs,
-      });
+      await onSave(buildConfig());
       setSaveStatus("saved");
       setHasUnsavedChanges(false);
     } catch (error) {
       setSaveStatus("error");
+    }
+  };
+
+  const handleLoadPreset = async (id: string) => {
+    setSelectedPresetId(id);
+    if (!id) return;
+    try {
+      const res = await fetch(`${serverUrl}/presets/${id}`);
+      if (!res.ok) return;
+      const preset = await res.json();
+      const config = preset.config || {};
+      if (config.instructions !== undefined) setInstructions(config.instructions);
+      if (config.voice) setVoice(config.voice);
+      if (config.model) setModel(config.model);
+      setTools((config.tools || []).map((t: any) => JSON.stringify(t)));
+      setDisconnectPhrases((config.disconnect_phrases || []).join("\n"));
+      if (config.silence_duration_ms) setSilenceDurationMs(config.silence_duration_ms);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleSaveAsNewPreset = async () => {
+    const name = newPresetName.trim();
+    if (!name) return;
+    setPresetStatus("saving");
+    try {
+      const res = await fetch(`${serverUrl}/presets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, config: buildConfig() }),
+      });
+      if (!res.ok) throw new Error("failed");
+      const preset = await res.json();
+      setPresets((prev) => [
+        { id: preset.id, name: preset.name, updatedAt: preset.updatedAt },
+        ...prev,
+      ]);
+      setSelectedPresetId(preset.id);
+      setNewPresetName("");
+      setPresetStatus("saved");
+    } catch {
+      setPresetStatus("error");
+    }
+  };
+
+  const handleUpdatePreset = async () => {
+    const current = presets.find((p) => p.id === selectedPresetId);
+    if (!current) return;
+    setPresetStatus("saving");
+    try {
+      const res = await fetch(`${serverUrl}/presets/${current.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: current.name, config: buildConfig() }),
+      });
+      if (!res.ok) throw new Error("failed");
+      const preset = await res.json();
+      setPresets((prev) =>
+        prev.map((p) => (p.id === preset.id ? { ...p, updatedAt: preset.updatedAt } : p))
+      );
+      setPresetStatus("saved");
+    } catch {
+      setPresetStatus("error");
+    }
+  };
+
+  const handleDeletePreset = async () => {
+    if (!selectedPresetId) return;
+    try {
+      await fetch(`${serverUrl}/presets/${selectedPresetId}`, { method: "DELETE" });
+      setPresets((prev) => prev.filter((p) => p.id !== selectedPresetId));
+      setSelectedPresetId("");
+    } catch {
+      // ignore
     }
   };
 
@@ -212,6 +315,70 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
       <CardContent className="lg:flex-1 p-3 sm:p-5 overflow-visible lg:overflow-hidden lg:min-h-0">
         <div className="lg:h-full overflow-visible lg:overflow-y-auto">
           <div className="space-y-4 sm:space-y-6 m-1 pr-1">
+            <div className="space-y-2 pb-4 border-b">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium leading-none">
+                  プロンプトプリセット
+                </label>
+                {presetStatus === "saved" && (
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Check className="h-3 w-3" />
+                    保存しました
+                  </span>
+                )}
+                {presetStatus === "error" && (
+                  <span className="text-xs text-red-500">保存に失敗しました</span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Select value={selectedPresetId} onValueChange={handleLoadPreset}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="プリセットを選択して読み込む" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {presets.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleDeletePreset}
+                  disabled={!selectedPresetId}
+                  className="h-10 w-10 shrink-0"
+                >
+                  <Trash className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="新しいプリセット名"
+                  value={newPresetName}
+                  onChange={(e) => setNewPresetName(e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  variant="outline"
+                  onClick={handleSaveAsNewPreset}
+                  disabled={!newPresetName.trim()}
+                  className="shrink-0"
+                >
+                  新規保存
+                </Button>
+              </div>
+              {selectedPresetId && (
+                <Button variant="outline" className="w-full" onClick={handleUpdatePreset}>
+                  現在の内容をこのプリセットに上書き保存
+                </Button>
+              )}
+              <p className="text-xs text-muted-foreground">
+                プリセットを読み込むと下のフォームに反映されます。実際の通話に適用するには「Save Configuration」を押してください。
+              </p>
+            </div>
+
             <div className="space-y-2">
               <label className="text-sm font-medium leading-none">
                 Instructions
