@@ -1,4 +1,5 @@
 import twilioClient from "@/lib/twilio";
+import { getSession, isAdmin } from "@/lib/auth";
 
 export async function GET() {
   if (!twilioClient) {
@@ -15,6 +16,11 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const session = await getSession();
+  if (!session || !isAdmin(session.role)) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   if (!twilioClient) {
     return Response.json(
       { error: "Twilio client not initialized" },

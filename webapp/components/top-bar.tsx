@@ -1,9 +1,34 @@
-import React from "react";
+"use client";
+
+import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { BookOpen, FileText } from "lucide-react";
+import { BookOpen, LogOut, Users } from "lucide-react";
 import Link from "next/link";
 
+const ROLE_LABEL: Record<string, string> = {
+  admin: "管理者",
+  editor: "編集者",
+  viewer: "閲覧者",
+};
+
 const TopBar = () => {
+  const router = useRouter();
+  const [me, setMe] = useState<{ username: string; role: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setMe)
+      .catch(() => {});
+  }, []);
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  };
+
   return (
     <div className="flex justify-between items-center px-6 py-4 border-b">
       <div className="flex items-center gap-4">
@@ -17,8 +42,21 @@ const TopBar = () => {
         </svg>
         <h1 className="text-xl font-semibold">HTSol AI Call Assistant</h1>
       </div>
-      <div className="flex gap-3">
-        <Button variant="ghost" size="sm">
+      <div className="flex items-center gap-3">
+        {me && (
+          <span className="text-sm text-muted-foreground hidden sm:inline">
+            {me.username}（{ROLE_LABEL[me.role] || me.role}）
+          </span>
+        )}
+        {me?.role === "admin" && (
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/admin/users" className="flex items-center gap-2">
+              <Users className="w-4 h-4" />
+              ユーザー管理
+            </Link>
+          </Button>
+        )}
+        <Button variant="ghost" size="sm" asChild>
           <Link
             href="https://platform.openai.com/docs/guides/realtime"
             className="flex items-center gap-2"
@@ -28,6 +66,9 @@ const TopBar = () => {
             <BookOpen className="w-4 h-4" />
             Documentation
           </Link>
+        </Button>
+        <Button variant="ghost" size="sm" onClick={handleLogout}>
+          <LogOut className="w-4 h-4" />
         </Button>
       </div>
     </div>

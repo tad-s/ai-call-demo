@@ -9,13 +9,13 @@ import { Button } from "@/components/ui/button";
 type PhoneNumberChecklistProps = {
   selectedPhoneNumber: string;
   allConfigsReady: boolean;
-  setAllConfigsReady: (ready: boolean) => void;
+  onOpenChecklist: () => void;
 };
 
 const PhoneNumberChecklist: React.FC<PhoneNumberChecklistProps> = ({
   selectedPhoneNumber,
   allConfigsReady,
-  setAllConfigsReady,
+  onOpenChecklist,
 }) => {
   const [isVisible, setIsVisible] = useState(true);
 
@@ -52,11 +52,7 @@ const PhoneNumberChecklist: React.FC<PhoneNumberChecklistProps> = ({
             {allConfigsReady ? "Setup Ready" : "Setup Not Ready"}
           </span>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setAllConfigsReady(false)}
-        >
+        <Button variant="outline" size="sm" onClick={onOpenChecklist}>
           Checklist
         </Button>
       </div>

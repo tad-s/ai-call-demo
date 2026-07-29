@@ -54,15 +54,37 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
   const [presetStatus, setPresetStatus] = useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
+  const [assignedUserIds, setAssignedUserIds] = useState<string[]>([]);
 
-  const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:8081";
+  const [role, setRole] = useState<"admin" | "editor" | "viewer" | null>(null);
+  const [allUsers, setAllUsers] = useState<{ id: string; username: string }[]>([]);
+  const readOnly = role === "viewer";
 
   // Custom hook to fetch backend tools every 3 seconds
-  const backendTools = useBackendTools(`${serverUrl}/tools`, 3000);
+  const backendTools = useBackendTools("/api/tools", 3000);
+
+  // 自分のロールを取得
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((me) => setRole(me?.role || null))
+      .catch(() => {});
+  }, []);
+
+  // 管理者の場合のみ、プリセットの割り当て先選択用にユーザー一覧を取得
+  useEffect(() => {
+    if (role !== "admin") return;
+    fetch("/api/users")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list) =>
+        setAllUsers(Array.isArray(list) ? list.map((u: any) => ({ id: u.id, username: u.username })) : [])
+      )
+      .catch(() => {});
+  }, [role]);
 
   // 起動時に保存済み設定を取得してフォームに反映
   useEffect(() => {
-    fetch(`${serverUrl}/config`)
+    fetch("/api/config")
       .then((r) => r.json())
       .then((config) => {
         if (config.instructions) setInstructions(config.instructions);
@@ -86,7 +108,7 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
 
   // プリセット一覧を取得
   useEffect(() => {
-    fetch(`${serverUrl}/presets`)
+    fetch("/api/presets")
       .then((r) => r.json())
       .then((list) => setPresets(Array.isArray(list) ? list : []))
       .catch(() => {});
@@ -142,7 +164,7 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
     setSelectedPresetId(id);
     if (!id) return;
     try {
-      const res = await fetch(`${serverUrl}/presets/${id}`);
+      const res = await fetch(`/api/presets/${id}`);
       if (!res.ok) return;
       const preset = await res.json();
       const config = preset.config || {};
@@ -152,6 +174,7 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
       setTools((config.tools || []).map((t: any) => JSON.stringify(t)));
       setDisconnectPhrases((config.disconnect_phrases || []).join("\n"));
       if (config.silence_duration_ms) setSilenceDurationMs(config.silence_duration_ms);
+      setAssignedUserIds(preset.assignedUserIds || []);
     } catch {
       // ignore
     }
@@ -162,10 +185,10 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
     if (!name) return;
     setPresetStatus("saving");
     try {
-      const res = await fetch(`${serverUrl}/presets`, {
+      const res = await fetch("/api/presets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, config: buildConfig() }),
+        body: JSON.stringify({ name, config: buildConfig(), assignedUserIds }),
       });
       if (!res.ok) throw new Error("failed");
       const preset = await res.json();
@@ -186,10 +209,10 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
     if (!current) return;
     setPresetStatus("saving");
     try {
-      const res = await fetch(`${serverUrl}/presets/${current.id}`, {
+      const res = await fetch(`/api/presets/${current.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: current.name, config: buildConfig() }),
+        body: JSON.stringify({ name: current.name, config: buildConfig(), assignedUserIds }),
       });
       if (!res.ok) throw new Error("failed");
       const preset = await res.json();
@@ -205,12 +228,19 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
   const handleDeletePreset = async () => {
     if (!selectedPresetId) return;
     try {
-      await fetch(`${serverUrl}/presets/${selectedPresetId}`, { method: "DELETE" });
+      await fetch(`/api/presets/${selectedPresetId}`, { method: "DELETE" });
       setPresets((prev) => prev.filter((p) => p.id !== selectedPresetId));
       setSelectedPresetId("");
+      setAssignedUserIds([]);
     } catch {
       // ignore
     }
+  };
+
+  const toggleAssignedUser = (userId: string) => {
+    setAssignedUserIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
   };
 
   const handleAddTool = () => {
@@ -347,32 +377,63 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
                   variant="ghost"
                   size="icon"
                   onClick={handleDeletePreset}
-                  disabled={!selectedPresetId}
+                  disabled={!selectedPresetId || readOnly}
                   className="h-10 w-10 shrink-0"
                 >
                   <Trash className="h-4 w-4" />
                 </Button>
               </div>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="新しいプリセット名"
-                  value={newPresetName}
-                  onChange={(e) => setNewPresetName(e.target.value)}
-                  className="flex-1"
-                />
-                <Button
-                  variant="outline"
-                  onClick={handleSaveAsNewPreset}
-                  disabled={!newPresetName.trim()}
-                  className="shrink-0"
-                >
-                  新規保存
-                </Button>
-              </div>
-              {selectedPresetId && (
-                <Button variant="outline" className="w-full" onClick={handleUpdatePreset}>
-                  現在の内容をこのプリセットに上書き保存
-                </Button>
+              {!readOnly && (
+                <>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="新しいプリセット名"
+                      value={newPresetName}
+                      onChange={(e) => setNewPresetName(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={handleSaveAsNewPreset}
+                      disabled={!newPresetName.trim()}
+                      className="shrink-0"
+                    >
+                      新規保存
+                    </Button>
+                  </div>
+                  {selectedPresetId && (
+                    <Button variant="outline" className="w-full" onClick={handleUpdatePreset}>
+                      現在の内容をこのプリセットに上書き保存
+                    </Button>
+                  )}
+                </>
+              )}
+              {role === "admin" && (
+                <div className="space-y-1 pt-2">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    このプリセットを見せるユーザー
+                  </label>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    {allUsers.map((u) => (
+                      <label
+                        key={u.id}
+                        className="flex items-center gap-1.5 text-sm cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={assignedUserIds.includes(u.id)}
+                          onChange={() => toggleAssignedUser(u.id)}
+                        />
+                        {u.username}
+                      </label>
+                    ))}
+                    {allUsers.length === 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        ユーザーがいません
+                      </span>
+                    )}
+                  </div>
+                </div>
               )}
               <p className="text-xs text-muted-foreground">
                 プリセットを読み込むと下のフォームに反映されます。実際の通話に適用するには「Save Configuration」を押してください。
@@ -388,12 +449,13 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
                 className="min-h-[100px] resize-none"
                 value={instructions}
                 onChange={(e) => setInstructions(e.target.value)}
+                disabled={readOnly}
               />
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium leading-none">Voice</label>
-              <Select value={voice} onValueChange={setVoice}>
+              <Select value={voice} onValueChange={setVoice} disabled={readOnly}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select voice" />
                 </SelectTrigger>
@@ -409,7 +471,7 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
 
             <div className="space-y-2">
               <label className="text-sm font-medium leading-none">Model</label>
-              <Select value={model} onValueChange={setModel}>
+              <Select value={model} onValueChange={setModel} disabled={readOnly}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select model" />
                 </SelectTrigger>
@@ -439,6 +501,7 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
                 className="min-h-[60px] resize-none"
                 value={disconnectPhrases}
                 onChange={(e) => setDisconnectPhrases(e.target.value)}
+                disabled={readOnly}
               />
               <p className="text-xs text-muted-foreground">
                 AIがこのフレーズを発話した後、自動で通話を切断します。複数行で複数設定可。
@@ -458,6 +521,7 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
                   value={silenceDurationMs}
                   onChange={(e) => setSilenceDurationMs(Number(e.target.value))}
                   className="flex-1"
+                  disabled={readOnly}
                 />
                 <span className="text-sm font-mono w-16 text-right">
                   {silenceDurationMs} ms
@@ -483,35 +547,39 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
                         {name}
                         {backend && <BackendTag />}
                       </span>
-                      <div className="flex gap-1 flex-shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEditTool(index)}
-                          className="h-8 w-8"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDeleteTool(index)}
-                          className="h-8 w-8"
-                        >
-                          <Trash className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      {!readOnly && (
+                        <div className="flex gap-1 flex-shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEditTool(index)}
+                            className="h-8 w-8"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteTool(index)}
+                            className="h-8 w-8"
+                          >
+                            <Trash className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={handleAddTool}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Tool
-                </Button>
+                {!readOnly && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleAddTool}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Tool
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -523,7 +591,7 @@ const SessionConfigurationPanel: React.FC<SessionConfigurationPanelProps> = ({
         <Button
           className="w-full"
           onClick={handleSave}
-          disabled={saveStatus === "saving" || !hasUnsavedChanges}
+          disabled={readOnly || saveStatus === "saving" || !hasUnsavedChanges}
         >
           {saveStatus === "saving" ? (
             "Saving..."

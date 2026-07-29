@@ -23,11 +23,15 @@ import {
 export default function ChecklistAndConfig({
   ready,
   setReady,
+  modalOpen,
+  setModalOpen,
   selectedPhoneNumber,
   setSelectedPhoneNumber,
 }: {
   ready: boolean;
   setReady: (val: boolean) => void;
+  modalOpen: boolean;
+  setModalOpen: (val: boolean) => void;
   selectedPhoneNumber: string;
   setSelectedPhoneNumber: (val: string) => void;
 }) {
@@ -35,6 +39,14 @@ export default function ChecklistAndConfig({
   const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([]);
   const [currentNumberSid, setCurrentNumberSid] = useState("");
   const [currentVoiceUrl, setCurrentVoiceUrl] = useState("");
+  const [isAdminUser, setIsAdminUser] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((me) => setIsAdminUser(me?.role === "admin"))
+      .catch(() => {});
+  }, []);
 
   const [publicUrl, setPublicUrl] = useState("");
   const [localServerUp, setLocalServerUp] = useState(false);
@@ -267,7 +279,8 @@ export default function ChecklistAndConfig({
             <div className="flex-1">
               <Button
                 onClick={updateWebhook}
-                disabled={webhookLoading}
+                disabled={webhookLoading || !isAdminUser}
+                title={!isAdminUser ? "管理者のみ変更できます" : undefined}
                 className="w-full"
               >
                 {webhookLoading ? (
@@ -293,6 +306,7 @@ export default function ChecklistAndConfig({
     appendedTwimlUrl,
     webhookLoading,
     ngrokLoading,
+    isAdminUser,
     setSelectedPhoneNumber,
   ]);
 
@@ -300,22 +314,22 @@ export default function ChecklistAndConfig({
     setAllChecksPassed(checklist.every((item) => item.done));
   }, [checklist]);
 
+  // ローカルサーバーが上がったタイミングで公開URLの疎通を確認する
+  // （モーダルの表示有無に関わらず、随時チェックとして常時実行する）
   useEffect(() => {
-    if (!ready) {
-      checkNgrok();
-    }
-  }, [localServerUp, ready]);
+    checkNgrok();
+  }, [localServerUp]);
 
+  // ready はチェック結果をそのまま反映するだけの状態にし、
+  // モーダルの開閉とは切り離す（自動ポップアップは行わない）
   useEffect(() => {
-    if (!allChecksPassed) {
-      setReady(false);
-    }
+    setReady(allChecksPassed);
   }, [allChecksPassed, setReady]);
 
-  const handleDone = () => setReady(true);
+  const handleDone = () => setModalOpen(false);
 
   return (
-    <Dialog open={!ready}>
+    <Dialog open={modalOpen}>
       <DialogContent className="w-full max-w-[800px]">
         <DialogHeader>
           <DialogTitle>Setup Checklist</DialogTitle>
@@ -356,11 +370,7 @@ export default function ChecklistAndConfig({
               各サービス起動確認OK。利用できる状態です！
             </p>
           )}
-          <Button
-            variant="outline"
-            onClick={handleDone}
-            disabled={!allChecksPassed}
-          >
+          <Button variant="outline" onClick={handleDone}>
             閉じる
           </Button>
         </div>

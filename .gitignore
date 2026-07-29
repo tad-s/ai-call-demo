@@ -18,6 +18,7 @@ websocket-server/dist/
 websocket-server/config.json
 websocket-server/transcripts/
 websocket-server/presets.json
+websocket-server/users.json
 
 # OS
 .DS_Store

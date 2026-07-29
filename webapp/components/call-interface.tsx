@@ -17,6 +17,7 @@ const MAX_HISTORY = 50;
 const CallInterface = () => {
   const [selectedPhoneNumber, setSelectedPhoneNumber] = useState("");
   const [allConfigsReady, setAllConfigsReady] = useState(false);
+  const [checklistOpen, setChecklistOpen] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
   const [callStatus, setCallStatus] = useState("disconnected");
   const [ws, setWs] = useState<WebSocket | null>(null);
@@ -25,6 +26,15 @@ const CallInterface = () => {
   const [callMessage, setCallMessage] = useState("");
   const [disconnecting, setDisconnecting] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [role, setRole] = useState<"admin" | "editor" | "viewer" | null>(null);
+  const canOperate = role === "admin" || role === "editor";
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((me) => setRole(me?.role || null))
+      .catch(() => {});
+  }, []);
 
   const currentConfigRef = useRef<any>(null);
   const itemsRef = useRef<Item[]>([]);
@@ -101,8 +111,7 @@ const CallInterface = () => {
 
   const handleSave = async (config: any) => {
     currentConfigRef.current = config;
-    const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:8081";
-    await fetch(`${serverUrl}/config`, {
+    await fetch("/api/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(config),
@@ -115,8 +124,7 @@ const CallInterface = () => {
   const handleEndCall = async () => {
     setDisconnecting(true);
     try {
-      const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:8081";
-      await fetch(`${serverUrl}/end-call`, { method: "POST" });
+      await fetch("/api/end-call", { method: "POST" });
       setCallMessage("通話を切断しました");
     } catch {
       setCallMessage("切断に失敗しました");
@@ -156,6 +164,8 @@ const CallInterface = () => {
       <ChecklistAndConfig
         ready={allConfigsReady}
         setReady={setAllConfigsReady}
+        modalOpen={checklistOpen}
+        setModalOpen={setChecklistOpen}
         selectedPhoneNumber={selectedPhoneNumber}
         setSelectedPhoneNumber={setSelectedPhoneNumber}
       />
@@ -173,14 +183,14 @@ const CallInterface = () => {
           />
           <button
             onClick={handleCall}
-            disabled={calling}
+            disabled={calling || !canOperate}
             className="bg-green-600 hover:bg-green-700 text-white px-4 py-1 rounded text-sm font-medium disabled:opacity-50 whitespace-nowrap"
           >
             {calling ? "発信中..." : "📞 発信"}
           </button>
           <button
             onClick={handleEndCall}
-            disabled={disconnecting}
+            disabled={disconnecting || !canOperate}
             className="bg-red-600 hover:bg-red-700 text-white px-4 py-1 rounded text-sm font-medium disabled:opacity-50 whitespace-nowrap"
           >
             {disconnecting ? "切断中..." : "📵 強制切断"}
@@ -211,7 +221,7 @@ const CallInterface = () => {
             <PhoneNumberChecklist
               selectedPhoneNumber={selectedPhoneNumber}
               allConfigsReady={allConfigsReady}
-              setAllConfigsReady={setAllConfigsReady}
+              onOpenChecklist={() => setChecklistOpen(true)}
             />
             <Transcript items={items} />
           </div>

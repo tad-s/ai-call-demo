@@ -15,12 +15,15 @@ interface Preset {
   name: string;
   config: any;
   updatedAt: string;
+  assignedUserIds: string[];
 }
 
 function readFile(): Preset[] {
   if (!existsSync(PRESETS_PATH)) return [];
   try {
-    return JSON.parse(readFileSync(PRESETS_PATH, "utf-8"));
+    const parsed = JSON.parse(readFileSync(PRESETS_PATH, "utf-8"));
+    // 旧形式（assignedUserIdsなし）との互換
+    return parsed.map((p: any) => ({ assignedUserIds: [], ...p }));
   } catch {
     return [];
   }
@@ -31,11 +34,16 @@ function writeFile(presets: Preset[]): void {
 }
 
 export async function listPresets(): Promise<
-  { id: string; name: string; updatedAt: string }[]
+  { id: string; name: string; updatedAt: string; assignedUserIds: string[] }[]
 > {
   if (isDbAvailable()) return listPresetsFromDb();
   return readFile()
-    .map(({ id, name, updatedAt }) => ({ id, name, updatedAt }))
+    .map(({ id, name, updatedAt, assignedUserIds }) => ({
+      id,
+      name,
+      updatedAt,
+      assignedUserIds,
+    }))
     .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
 }
 
@@ -48,12 +56,15 @@ export async function savePreset(input: {
   id?: string;
   name: string;
   config: any;
+  assignedUserIds?: string[];
 }): Promise<Preset> {
   const id = input.id || randomUUID();
+  const existing = await getPreset(id);
   const preset: Preset = {
     id,
     name: input.name,
     config: input.config,
+    assignedUserIds: input.assignedUserIds ?? existing?.assignedUserIds ?? [],
     updatedAt: new Date().toISOString(),
   };
 

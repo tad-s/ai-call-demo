@@ -20,8 +20,18 @@ import {
   listTranscriptsFromDb,
   getTranscriptFromDb,
   initPresetsTable,
+  initUsersTable,
 } from "./database";
 import { listPresets, getPreset, savePreset, deletePreset } from "./presets";
+import {
+  listUsers,
+  createUser,
+  updateUser,
+  deleteUser,
+  verifyPassword,
+  ensureInitialAdmin,
+  ROLES,
+} from "./users";
 
 dotenv.config();
 
@@ -46,6 +56,9 @@ app.use(express.json());
 loadDefaultConfig();
 initDb().catch((e) => console.error("[DB] Init error:", e.message));
 initPresetsTable().catch((e) => console.error("[DB] Init error:", e.message));
+initUsersTable()
+  .then(() => ensureInitialAdmin())
+  .catch((e) => console.error("[Auth] Init error:", e.message));
 
 const twimlPath = join(__dirname, "twiml.xml");
 const twimlTemplate = readFileSync(twimlPath, "utf-8");
@@ -108,26 +121,28 @@ app.get("/presets/:id", async (req, res) => {
 });
 
 app.post("/presets", async (req, res) => {
-  const { name, config } = req.body;
+  const { name, config, assignedUserIds } = req.body;
   if (!name || !config) {
     res.status(400).json({ error: "name and config are required" });
     return;
   }
   try {
-    res.json(await savePreset({ name, config }));
+    res.json(await savePreset({ name, config, assignedUserIds }));
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
 });
 
 app.put("/presets/:id", async (req, res) => {
-  const { name, config } = req.body;
+  const { name, config, assignedUserIds } = req.body;
   if (!name || !config) {
     res.status(400).json({ error: "name and config are required" });
     return;
   }
   try {
-    res.json(await savePreset({ id: req.params.id, name, config }));
+    res.json(
+      await savePreset({ id: req.params.id, name, config, assignedUserIds })
+    );
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -136,6 +151,71 @@ app.put("/presets/:id", async (req, res) => {
 app.delete("/presets/:id", async (req, res) => {
   try {
     await deletePreset(req.params.id);
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 認証・ユーザー管理
+// このサーバー自体はセッション/権限の検証を行わない（webapp側のAPIルートが
+// ログイン状態とロールを確認した上でここを呼び出す、閉域内の内部APIという想定）
+app.post("/auth/verify", async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    res.status(400).json({ error: "username and password are required" });
+    return;
+  }
+  try {
+    const user = await verifyPassword(username, password);
+    if (!user) {
+      res.status(401).json({ error: "Invalid username or password" });
+      return;
+    }
+    res.json({ user });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/users", async (req, res) => {
+  try {
+    res.json(await listUsers());
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/users", async (req, res) => {
+  const { username, password, role } = req.body;
+  if (!username || !password || !ROLES.includes(role)) {
+    res.status(400).json({ error: "username, password and a valid role are required" });
+    return;
+  }
+  try {
+    res.json(await createUser({ username, password, role }));
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.put("/users/:id", async (req, res) => {
+  const { role, password } = req.body;
+  if (role !== undefined && !ROLES.includes(role)) {
+    res.status(400).json({ error: "invalid role" });
+    return;
+  }
+  try {
+    await updateUser(req.params.id, { role, password });
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.delete("/users/:id", async (req, res) => {
+  try {
+    await deleteUser(req.params.id);
     res.json({ ok: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });

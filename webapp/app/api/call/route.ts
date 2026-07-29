@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import twilio from "twilio";
+import { getSession, canEdit } from "@/lib/auth";
 
 export async function POST(req: Request) {
+  const session = await getSession();
+  if (!session || !canEdit(session.role)) {
+    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  }
+
   const { to } = await req.json();
   const client = twilio(
     process.env.TWILIO_ACCOUNT_SID,
